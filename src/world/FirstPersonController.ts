@@ -8,6 +8,7 @@ const MOVEMENT = {
   GROUND_ACCEL: MOVEMENT_CONFIG.ACCELERATE,
   AIR_ACCEL: MOVEMENT_CONFIG.AIR_ACCELERATE,
   AIR_SPEED_CAP: MOVEMENT_CONFIG.AIR_CAP,
+  AIR_TURN_RATE: MOVEMENT_CONFIG.AIR_TURN_RATE,
   FRICTION: MOVEMENT_CONFIG.FRICTION,
   STOP_SPEED: MOVEMENT_CONFIG.STOP_SPEED,
   GRAVITY: MOVEMENT_CONFIG.GRAVITY,
@@ -29,6 +30,9 @@ const MOVEMENT = {
   SLIDE_FRICTION_RAMP: MOVEMENT_CONFIG.SLIDE_FRICTION_RAMP,
   SLIDE_COOLDOWN: MOVEMENT_CONFIG.SLIDE_COOLDOWN,
   SLIDE_CARVE_ACCEL: MOVEMENT_CONFIG.SLIDE_CARVE_ACCEL,
+  SLIDE_TURN_RATE: MOVEMENT_CONFIG.SLIDE_TURN_RATE,
+  SLIDE_THROTTLE_ACCEL: MOVEMENT_CONFIG.SLIDE_THROTTLE_ACCEL,
+  SLIDE_BRAKE_ACCEL: MOVEMENT_CONFIG.SLIDE_BRAKE_ACCEL,
   SLIDE_SLOPE_ACCEL: MOVEMENT_CONFIG.SLIDE_SLOPE_ACCEL,
   SLIDE_HOP_BOOST: MOVEMENT_CONFIG.SLIDE_HOP_BOOST,
   SLIDE_FALL_CONVERSION: MOVEMENT_CONFIG.SLIDE_FALL_CONVERSION,
@@ -220,7 +224,7 @@ export class FirstPersonController {
       }
 
       if (this.sliding) {
-        this.applySlideMovement(strafe, dt);
+        this.applySlideMovement(forward, strafe, right, dt);
       } else if (!slideJumpTriggered) {
         this.applyGroundMovement(wishX, wishZ, input.jumpPressed, dt);
       }
@@ -384,8 +388,39 @@ export class FirstPersonController {
     }
   }
 
-  private applySlideMovement(strafe: number, dt: number) {
+  private applySlideMovement(
+    forward: number,
+    strafe: number,
+    cameraRight: BABYLON.Vector3,
+    dt: number,
+  ) {
     this.slideElapsed += dt;
+
+    // Steering gradually rotates both the locked slide direction and the
+    // current velocity. This preserves momentum while still allowing the
+    // player to carve out of a slide instead of being forced into a rail.
+    if (strafe !== 0) {
+      const desiredX = cameraRight.x * strafe;
+      const desiredZ = cameraRight.z * strafe;
+      const angle = Math.atan2(
+        this.slideDirectionZ * desiredX - this.slideDirectionX * desiredZ,
+        this.slideDirectionX * desiredX + this.slideDirectionZ * desiredZ,
+      );
+      const maxTurn = MOVEMENT.SLIDE_TURN_RATE * dt;
+      const turn = Math.max(-maxTurn, Math.min(maxTurn, angle));
+      const cosine = Math.cos(turn);
+      const sine = Math.sin(turn);
+
+      const directionX = this.slideDirectionX * cosine - this.slideDirectionZ * sine;
+      const directionZ = this.slideDirectionX * sine + this.slideDirectionZ * cosine;
+      this.slideDirectionX = directionX;
+      this.slideDirectionZ = directionZ;
+
+      const velocityX = this.velX;
+      const velocityZ = this.velZ;
+      this.velX = velocityX * cosine - velocityZ * sine;
+      this.velZ = velocityX * sine + velocityZ * cosine;
+    }
 
     const groundNormal = this.getGroundNormal();
     const slopeAmount = Math.max(0, Math.min(1, (1 - groundNormal.y) / 0.7));
@@ -419,10 +454,26 @@ export class FirstPersonController {
     // The main slide direction remains locked. Only a small lateral carve is
     // allowed, perpendicular to that direction.
     if (strafe !== 0) {
-      const carveX = this.slideDirectionZ * strafe;
-      const carveZ = -this.slideDirectionX * strafe;
+      const carveX = cameraRight.x * strafe;
+      const carveZ = cameraRight.z * strafe;
       this.velX += carveX * MOVEMENT.SLIDE_CARVE_ACCEL * dt;
       this.velZ += carveZ * MOVEMENT.SLIDE_CARVE_ACCEL * dt;
+    }
+
+    if (forward > 0) {
+      this.velX += this.slideDirectionX * MOVEMENT.SLIDE_THROTTLE_ACCEL * dt;
+      this.velZ += this.slideDirectionZ * MOVEMENT.SLIDE_THROTTLE_ACCEL * dt;
+    } else if (forward < 0) {
+      const forwardSpeed = Math.max(
+        0,
+        this.velX * this.slideDirectionX + this.velZ * this.slideDirectionZ,
+      );
+      const braking = Math.min(
+        MOVEMENT.SLIDE_BRAKE_ACCEL * dt,
+        forwardSpeed,
+      );
+      this.velX -= this.slideDirectionX * braking;
+      this.velZ -= this.slideDirectionZ * braking;
     }
 
     const finalSpeed = Math.hypot(this.velX, this.velZ);
@@ -492,9 +543,29 @@ export class FirstPersonController {
   }
 
   private applyAirMovement(wishX: number, wishZ: number, dt: number) {
-    // Source-style air steering: add only the capped projected wish speed,
-    // then preserve the unprojected component of the existing momentum.
+    // Source-style air steering. The capped acceleration adds a small amount
+    // of wish speed, while the turn-rate steering rotates existing momentum
+    // toward the requested direction without throwing that momentum away.
     if (wishX !== 0 || wishZ !== 0) {
+      const speed = Math.hypot(this.velX, this.velZ);
+      if (speed > 0.5) {
+        const currentAngle = Math.atan2(this.velZ, this.velX);
+        const targetAngle = Math.atan2(wishZ, wishX);
+        const angleDifference = Math.atan2(
+          Math.sin(targetAngle - currentAngle),
+          Math.cos(targetAngle - currentAngle),
+        );
+        const maxTurn = MOVEMENT.AIR_TURN_RATE * dt;
+        const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDifference));
+        const cosine = Math.cos(turn);
+        const sine = Math.sin(turn);
+        const velocityX = this.velX;
+        const velocityZ = this.velZ;
+
+        this.velX = velocityX * cosine - velocityZ * sine;
+        this.velZ = velocityX * sine + velocityZ * cosine;
+      }
+
       const currentSpeed = this.velX * wishX + this.velZ * wishZ;
       const addedSpeed = Math.min(
         MOVEMENT.AIR_ACCEL * MOVEMENT.AIR_SPEED_CAP * dt,

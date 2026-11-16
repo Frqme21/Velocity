@@ -11,7 +11,7 @@ A minimal Babylon.js + Rapier3D first-person movement sandbox.
 - `Ctrl` — hold to slide; holding it while landing automatically starts a slide
 - `Esc` — release the pointer
 
-Movement uses one constant run speed with momentum-preserving ground and air control. Sliding has a forward impulse, short low-friction window, slope acceleration, locked-direction carving, slide-hopping, and speed-based camera FOV. The dash meter below the circular crosshair refills in 0.7 seconds. The mouse camera applies raw pointer-lock deltas directly without camera inertia or interpolation.
+Movement uses one constant run speed with momentum-preserving ground and air control. Airborne momentum can be steered without being discarded, and slides support camera-relative carving, throttle, braking, slope acceleration, and slide-hopping. Sliding also includes a forward impulse, a short low-friction window, and speed-based camera FOV. The dash meter below the circular crosshair refills in 0.7 seconds. The mouse camera applies raw pointer-lock deltas directly without camera inertia or interpolation.
 
 ## Development
 
