@@ -18,6 +18,8 @@ export interface InputState {
   slide: boolean;
   /** True only on the frame a slide key is pressed. */
   slidePressed: boolean;
+  /** True only on the frame the attack button is pressed. */
+  attackPressed: boolean;
   mouseDX: number;
   mouseDY: number;
 }
@@ -34,6 +36,7 @@ export class InputManager {
   private slideLatch = false;
   private leftLatch = false;
   private rightLatch = false;
+  private attackLatch = false;
   private locked = false;
   private canvas: HTMLCanvasElement;
 
@@ -51,6 +54,9 @@ export class InputManager {
 
   /** Fired when the grapple button (right mouse) is pressed. */
   public onGrapplePressed?: () => void;
+
+  /** Fired when the attack button (left mouse) is pressed. */
+  public onAttackPressed?: () => void;
 
   private grappleMouseDown = false;
 
@@ -85,10 +91,16 @@ export class InputManager {
     // Right mouse fires the grapple.
     canvas.addEventListener('contextmenu', (event) => event.preventDefault());
     canvas.addEventListener('mousedown', (event) => {
-      if (!this.locked || event.button !== 2) return;
+      if (!this.locked) return;
       event.preventDefault();
-      this.grappleMouseDown = true;
-      this.onGrapplePressed?.();
+      if (event.button === 2) {
+        this.grappleMouseDown = true;
+        this.onGrapplePressed?.();
+      } else if (event.button === 0) {
+        // Left mouse swings the katana.
+        this.attackLatch = true;
+        this.onAttackPressed?.();
+      }
     });
     window.addEventListener('mouseup', (event) => {
       if (event.button === 2) this.grappleMouseDown = false;
@@ -168,6 +180,7 @@ export class InputManager {
     this.slideLatch = false;
     this.leftLatch = false;
     this.rightLatch = false;
+    this.attackLatch = false;
     return state;
   }
 
@@ -186,6 +199,7 @@ export class InputManager {
       dashPressed: this.dashLatch,
       slide: this.keys.has('ControlLeft') || this.keys.has('ControlRight'),
       slidePressed: this.slideLatch,
+      attackPressed: this.attackLatch,
       mouseDX: this.dx,
       mouseDY: this.dy,
     };

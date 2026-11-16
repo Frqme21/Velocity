@@ -29,6 +29,7 @@ carries you up and over the platform you hooked.
 | `A` / `D` (during sensory boost) | Short sideways evasive dash |
 | Release `Shift` / let the meter empty (during sensory boost) | Short forward dash |
 | `Ctrl` | Hold to slide; holding it while landing automatically starts a slide |
+| Left mouse | Katana slash |
 | Right mouse | Fire the grapple at the locked ring |
 | `Esc` | Release the pointer |
 
@@ -94,6 +95,34 @@ do), so the landing is reliable from any approach angle.
 **Juice.** The FOV widens by `0.09 rad` during the pull and eases back over `0.28 s`,
 the camera leans into the travel direction, and a short launch shake fires on attach.
 
+## Katana slash
+
+Left mouse swings the katana. The swing lasts `0.2 s` with a `0.22 s` cooldown.
+
+**The blade disappears and a laser takes over.** While the cut is in progress the steel
+is hidden entirely and a procedural light trail is painted out of the blade tip instead.
+The trail is a ribbon generated from scratch every frame along a quadratic Bézier path
+in camera space, running from the upper right, bowing slightly upwards, and leaving
+through the lower left. A custom additive shader gives it a hot white core with a cyan
+glow that fades out along the tail. No extra model files are involved — it is all
+geometry and a shader.
+
+The hidden blade still rides the path: its tip is placed exactly on the trail head and
+the blade is turned to follow the cut, so the light always comes out of the tip. When
+the swing ends the blade reappears where the slash finished and eases back into its
+resting pose over `0.12 s`.
+
+**The hit.** On the impact frame (halfway through the swing) the game runs a forward
+cone check: `3.4 m` range and a `75°` full-width cone around the crosshair, widened by
+the target's own radius. A hit produces `35 ms` of hit-stop (the world freezes while
+the viewmodel keeps moving), plays the katana slash sound, and **instantly refills the
+dash meter**, so kills chain straight into the next rooftop traversal.
+
+The target registry is intentionally decoupled from any enemy implementation:
+`KatanaCombat` keeps a list of registered targets and asks each one to slice itself.
+Future enemies plug into it by registering a target with a position, a radius and an
+`onSlice` callback.
+
 ## Project structure
 
 ```
@@ -101,9 +130,12 @@ src/
   app/
     Game.ts                 scene wiring, render loop, HUD updates
     main.ts                 bootstrap
+  audio/
+    AudioManager.ts         sound playback with a small voice pool
   config/
     movement.ts             all movement tuning
     grapple.ts              all grapple tuning
+    combat.ts               all melee + slash tuning
   input/
     InputManager.ts         keyboard + pointer-lock mouse, pointer-lock gated
   physics/
@@ -113,7 +145,9 @@ src/
   world/
     FirstPersonController.ts  player movement, dash, slide, wall run, mantle, grapple
     Grappler.ts             targeting, ring visuals, cooldown
-    KatanaViewmodel.ts      first-person katana
+    KatanaViewmodel.ts      first-person katana, swing animation, slash visuals
+    KatanaCombat.ts         melee target registry + cone check
+    SlashTrail.ts           procedural laser-slash ribbon + additive shader
     maps/graybox.ts         the level and its grapple anchors
 ```
 
@@ -125,15 +159,17 @@ velocity.
 
 ## Tuning
 
-Every number that defines the feel lives in one of two files, with no magic values
+Every number that defines the feel lives in one of three files, with no magic values
 scattered through the code:
 
 - `src/config/movement.ts` — run speed, acceleration, gravity, dash, sensory boost,
   slide, mantle, camera response.
 - `src/config/grapple.ts` — targeting cone/range/LOS, pull speed and response, detach
   distance, vault forces, jump/dash boosts, FOV kick, roll and shake.
+- `src/config/combat.ts` — swing timing, hit cone and range, hit-stop, dash refill,
+  slash trail width, colours and fade.
 
-Both are plain `as const` objects, so tweaking a value and reloading is enough.
+All three are plain `as const` objects, so tweaking a value and reloading is enough.
 
 ## Development
 

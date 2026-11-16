@@ -5,8 +5,11 @@ import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { FirstPersonController } from '../world/FirstPersonController';
 import { createGraybox } from '../world/maps/graybox';
 import { KatanaViewmodel } from '../world/KatanaViewmodel';
+import { KatanaCombat } from '../world/KatanaCombat';
 import { Grappler } from '../world/Grappler';
 import { HUD } from '../ui/HUD';
+import { AudioManager } from '../audio/AudioManager';
+import { COMBAT_CONFIG } from '../config/combat';
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -16,17 +19,26 @@ export class Game {
   private input!: InputManager;
   private controller!: FirstPersonController;
   private katana!: KatanaViewmodel;
+  private combat!: KatanaCombat;
   private grappler!: Grappler;
   private hud!: HUD;
+  private audio!: AudioManager;
   private physics!: PhysicsWorld;
   private rapierWorld!: RAPIER.World;
+
+  /** Time left of the hit-stop micro freeze, in seconds. */
+  private hitStopTimer = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
 
   async init() {
-    this.engine = new BABYLON.Engine(this.canvas, true, { stencil: true });
+    // `audioEngine: true` is needed for Babylon to create its audio engine.
+    this.engine = new BABYLON.Engine(this.canvas, true, {
+      stencil: true,
+      audioEngine: true,
+    });
     this.engine.maxFPS = 240;
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 2));
 
@@ -113,23 +125,49 @@ export class Game {
     } catch (error) {
       console.warn('Katana viewmodel failed to load', error);
     }
+
+    // The melee registry. The enemy system will register its actors here;
+    // until then every swing whiffs and nothing is cut.
+    this.combat = new KatanaCombat();
+
+    // Left mouse swings the katana. The blade animation and the hit
+    // resolution are driven by the viewmodel, the hit itself by the combat
+    // registry.
+    this.input.onAttackPressed = () => {
+      if (!this.katana.playSwing()) return;
+      this.audio.play('katana-swing');
+    };
+    this.katana.onSwingImpact = () => this.resolveSwing();
+
+    this.audio = new AudioManager(this.scene);
+    await this.audio.load();
+    // The browser needs a gesture before the audio context may run.
+    this.canvas.addEventListener('click', () => this.audio.unlock());
+
     (window as unknown as Record<string, unknown>).__velocity = {
       BABYLON,
       scene: this.scene,
       camera: this.camera,
       katana: this.katana,
+      combat: this.combat,
       grappler: this.grappler,
       controller: this.controller,
       input: this.input,
+      audio: this.audio,
     };
 
     this.engine.runRenderLoop(() => {
       const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
 
+      // Hit-stop: a tiny freeze when the blade connects. The world stops,
+      // but the swing animation keeps playing so the slash stays readable.
+      this.hitStopTimer = Math.max(0, this.hitStopTimer - dt);
+      const simulationDt = this.hitStopTimer > 0 ? 0 : dt;
+
       // The movement runs first, then the grapple visuals are refreshed so the
       // tether starts at the player's current off-hand position and ends
       // exactly at the center of the locked ring.
-      this.controller.update(dt);
+      this.controller.update(simulationDt);
       this.physics.step();
       this.grappler.update(dt);
 
@@ -161,5 +199,33 @@ export class Game {
     });
 
     window.addEventListener('resize', () => this.engine.resize());
+  }
+
+  /**
+   * Resolve a katana swing that just crossed the target.
+   *
+   * A hit freezes the world for a few milliseconds, plays the slash sound,
+   * cuts the target and tops the dash meter back up so the next kill can be
+   * chained straight into a dash.
+   */
+  private resolveSwing() {
+    const target = this.combat.findTarget(
+      this.camera.position,
+      this.camera.getForwardRay().direction,
+    );
+    if (!target) return;
+
+    // Cut it.
+    target.onSlice();
+    this.combat.unregisterTarget(target);
+
+    // Punch: freeze the world for a few milliseconds.
+    this.hitStopTimer = COMBAT_CONFIG.HIT_STOP;
+
+    // The sound of the blade going through the target.
+    this.audio.play('katana-slash');
+
+    // Chain straight into the next dash.
+    this.controller.refillDash(COMBAT_CONFIG.DASH_REFILL);
   }
 }

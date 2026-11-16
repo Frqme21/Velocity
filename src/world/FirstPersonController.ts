@@ -1492,6 +1492,16 @@ export class FirstPersonController {
     return this.dashCharge;
   }
 
+  /**
+   * Instantly refill the dash meter.
+   *
+   * A successful katana hit tops the meter back up, so a kill can be
+   * chained straight into a dash across the rooftops.
+   */
+  refillDash(amount = 1) {
+    this.dashCharge = Math.max(this.dashCharge, Math.min(1, amount));
+  }
+
   get isGrounded(): boolean {
     return this.grounded;
   }

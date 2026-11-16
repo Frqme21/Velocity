@@ -1,5 +1,7 @@
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
+import { COMBAT_CONFIG } from '../config/combat';
+import { SlashTrail } from './SlashTrail';
 
 export interface KatanaViewmodelInput {
   speed: number;
@@ -22,6 +24,12 @@ const MODEL_URL = '/models/katana_sword.glb';
 const MODEL_SCALE = 0.00425;
 /** Middle of the wrapped handle, in raw model units. */
 const GRIP_ANCHOR = new BABYLON.Vector3(67, 0, 0);
+/**
+ * The very tip of the blade, in raw model units.
+ *
+ * The katana is curved (sori), so the tip sits a bit off the blade's axis.
+ */
+const BLADE_TIP = new BABYLON.Vector3(-173.1, -0.3, -9.3);
 
 /** Where the grip sits in camera space: lower right, forward of the near plane. */
 const REST_POSITION = new BABYLON.Vector3(0.55, -0.43, 0.5);
@@ -39,14 +47,48 @@ const BOB_Z = 0.004;
 const IDLE_BOB_Y = 0.0032;
 const IDLE_BOB_X = 0.0022;
 
+/**
+ * The slash path, in camera space.
+ *
+ * The blade is hidden while it cuts, so the light trail is what the player
+ * actually sees: a streak that starts in the upper right, bows slightly
+ * upwards and leaves through the lower left.
+ */
+const SLASH_START_TIP = new BABYLON.Vector3(0.62, 0.3, 0.55);
+/** The control point of the curve - it bows the slash upwards. */
+const SLASH_CONTROL_TIP = new BABYLON.Vector3(0.05, 0.36, 0.6);
+/** Where the blade tip finishes the cut, in the lower left. */
+const SLASH_END_TIP = new BABYLON.Vector3(-0.62, -0.34, 0.58);
+/** How many samples the slash curve is drawn with. */
+const SLASH_SAMPLES = 28;
+
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
+
+/** A point on the slash curve. */
+function slashPoint(u: number): BABYLON.Vector3 {
+  const t = 1 - u;
+  return SLASH_START_TIP.scale(t * t)
+    .add(SLASH_CONTROL_TIP.scale(2 * t * u))
+    .add(SLASH_END_TIP.scale(u * u));
+}
+
+/** The direction the slash travels at a point on the curve. */
+function slashTangent(u: number): BABYLON.Vector3 {
+  const t = 1 - u;
+  return SLASH_CONTROL_TIP.subtract(SLASH_START_TIP).scale(2 * t)
+    .add(SLASH_END_TIP.subtract(SLASH_CONTROL_TIP).scale(2 * u));
+}
 
 export class KatanaViewmodel {
   private scene: BABYLON.Scene;
   private camera: BABYLON.FreeCamera;
 
   private root: BABYLON.TransformNode | null = null;
+  /** Carries the swing rotation between the resting pose and the cut. */
+  private swingNode: BABYLON.TransformNode | null = null;
+  /** The meshes of the katana itself - they are hidden while it cuts. */
+  private bladeMeshes: BABYLON.AbstractMesh[] = [];
   private lights: BABYLON.Light[] = [];
 
   private bobPhase = 0;
@@ -58,6 +100,43 @@ export class KatanaViewmodel {
   private stateRoll = 0;
   private lastYaw = 0;
   private lastPitch = 0;
+
+  /** True while the swing animation is running. */
+  private swinging = false;
+  /** Time since the swing started, in seconds. */
+  private swingElapsed = 0;
+  /** Time left before another swing is allowed, in seconds. */
+  private swingCooldown = 0;
+  /** True once the impact frame of the current swing has been handled. */
+  private swingImpactFired = false;
+  /** True once the slash has been painted completely. */
+  private slashComplete = false;
+  /** Time left of the slash's afterglow, in seconds. */
+  private slashFade = 0;
+  /** The painted part of the slash, in camera space. */
+  private slashPoints: BABYLON.Vector3[] = [];
+  /** True while the blade eases back into its resting pose. */
+  private recovering = false;
+  /** Time since the blade reappeared, in seconds. */
+  private recoverElapsed = 0;
+  /** The pose the blade was in when it reappeared. */
+  private recoverFromPosition = new BABYLON.Vector3();
+  private recoverFromRotation = BABYLON.Quaternion.Identity();
+
+  /** The laser-like slash the blade paints through the air. */
+  private trail!: SlashTrail;
+
+  /** The grip and the blade tip in the model's local frame. */
+  private gripLocal = new BABYLON.Vector3();
+  private tipLocal = new BABYLON.Vector3();
+  /** The direction the blade points in the model's local frame. */
+  private bladeAxis = new BABYLON.Vector3();
+
+  /**
+   * Fired on the frame the blade crosses the target, so the hit resolves
+   * exactly when the slash is at its brightest.
+   */
+  public onSwingImpact?: () => void;
 
   private readonly bob = new BABYLON.Vector3();
   private readonly offset = new BABYLON.Vector3();
@@ -106,13 +185,24 @@ export class KatanaViewmodel {
     const rotatedGrip = new BABYLON.Vector3();
     gripOffset.rotateByQuaternionToRef(rotation, rotatedGrip);
 
+    // The blade tip, in the same space.
+    const tipOffset = BLADE_TIP.scale(MODEL_SCALE);
+    const rotatedTip = new BABYLON.Vector3();
+    tipOffset.rotateByQuaternionToRef(rotation, rotatedTip);
+
     const root = new BABYLON.TransformNode('katana-viewmodel', this.scene);
     root.parent = this.camera;
     this.basePosition.copyFrom(REST_POSITION).subtractInPlace(rotatedGrip);
     root.position.copyFrom(this.basePosition);
     root.rotationQuaternion = null;
 
-    align.parent = root;
+    // The swing happens on its own node, so the resting pose (bob, sway,
+    // movement states) stays untouched while the blade cuts.
+    const swingNode = new BABYLON.TransformNode('katana-swing', this.scene);
+    swingNode.parent = root;
+    swingNode.rotationQuaternion = BABYLON.Quaternion.Identity();
+
+    align.parent = swingNode;
     modelRoot.parent = align;
 
     const meshes: BABYLON.AbstractMesh[] = [];
@@ -136,10 +226,73 @@ export class KatanaViewmodel {
 
     this.addLights(meshes);
     this.root = root;
+    this.swingNode = swingNode;
+    this.bladeMeshes = meshes;
+    this.gripLocal.copyFrom(rotatedGrip);
+    this.tipLocal.copyFrom(rotatedTip);
+    this.bladeAxis.copyFrom(rotatedTip).subtractInPlace(rotatedGrip).normalize();
+
+    // The laser-like slash the blade paints instead of showing the steel.
+    this.trail = new SlashTrail(
+      this.scene,
+      this.camera,
+      COMBAT_CONFIG.SLASH_WIDTH,
+      new BABYLON.Color3(
+        COMBAT_CONFIG.SLASH_CORE_COLOR.r,
+        COMBAT_CONFIG.SLASH_CORE_COLOR.g,
+        COMBAT_CONFIG.SLASH_CORE_COLOR.b,
+      ),
+      new BABYLON.Color3(
+        COMBAT_CONFIG.SLASH_EDGE_COLOR.r,
+        COMBAT_CONFIG.SLASH_EDGE_COLOR.g,
+        COMBAT_CONFIG.SLASH_EDGE_COLOR.b,
+      ),
+    );
 
     // Draw the viewmodel in its own rendering group with a fresh depth buffer
     // so it can never clip into world geometry.
     this.scene.setRenderingAutoClearDepthStencil(1, true, true, false);
+  }
+
+  /**
+   * Start a swing.
+   *
+   * The blade vanishes and the slash takes over: the light is painted out
+   * of the blade tip while it travels through the air.
+   *
+   * Returns false when the katana is still recovering from the last one.
+   */
+  playSwing(): boolean {
+    if (!this.root) return false;
+    if (this.swinging || this.swingCooldown > 0) return false;
+
+    this.swinging = true;
+    this.swingElapsed = 0;
+    this.swingImpactFired = false;
+    this.slashComplete = false;
+    this.slashFade = 0;
+    this.slashPoints = [];
+    this.swingCooldown = COMBAT_CONFIG.SWING_COOLDOWN;
+
+    // The steel is hidden for the cut - the light trail is the blade now.
+    this.recovering = false;
+    this.resetSwingPose();
+    this.setBladeVisible(false);
+    this.trail.hide();
+
+    return true;
+  }
+
+  /** True while the swing animation is running. */
+  get isSwinging(): boolean {
+    return this.swinging;
+  }
+
+  /** Show or hide the katana model. */
+  private setBladeVisible(visible: boolean) {
+    for (const mesh of this.bladeMeshes) {
+      mesh.setEnabled(visible);
+    }
   }
 
   private addLights(meshes: BABYLON.AbstractMesh[]) {
@@ -247,12 +400,169 @@ export class KatanaViewmodel {
     this.stateOffset.z += (target.z - this.stateOffset.z) * stateBlend;
     this.stateRoll += (targetRoll - this.stateRoll) * stateBlend;
 
+    // The swing happens on its own node, so the resting pose below is
+    // unaffected by it.
+    this.updateSwing(dt);
+
     root.position.set(
       this.basePosition.x + bob.x + this.swayX + this.stateOffset.x,
       this.basePosition.y + bob.y + this.swayY + this.stateOffset.y,
       this.basePosition.z + bob.z + this.stateOffset.z,
     );
-    root.rotation.set(this.swayY * 0.6, this.swayX * 0.8, this.swayRoll + this.stateRoll);
+    root.rotation.set(
+      this.swayY * 0.6,
+      this.swayX * 0.8,
+      this.swayRoll + this.stateRoll,
+    );
+  }
+
+  /**
+   * Advance the swing animation.
+   *
+   * The blade is hidden while it cuts: the laser-like trail is painted out
+   * of the blade tip instead. The impact callback fires on the frame the
+   * blade crosses the target, which is the same frame the trail is at its
+   * brightest.
+   */
+  private updateSwing(dt: number) {
+    this.swingCooldown = Math.max(0, this.swingCooldown - dt);
+
+    if (this.swinging) {
+      this.swingElapsed += dt;
+      const progress = Math.min(this.swingElapsed / COMBAT_CONFIG.SWING_DURATION, 1);
+
+      // How far along the slash the blade tip is (0 = wound up, 1 = done).
+      const u = clamp(
+        (progress - COMBAT_CONFIG.SLASH_START) /
+          (COMBAT_CONFIG.SLASH_END - COMBAT_CONFIG.SLASH_START),
+        0,
+        1,
+      );
+
+      // The hidden blade rides the slash path, so the light always comes
+      // out of the blade tip.
+      this.updateSwingPose(u);
+
+      if (!this.slashComplete) {
+        if (u > 0) {
+          this.slashPoints = this.buildSlashPath(u);
+          this.trail.setPath(this.slashPoints, clamp(u / 0.12, 0, 1));
+        }
+        if (u >= 1) {
+          this.slashComplete = true;
+          this.slashFade = COMBAT_CONFIG.SLASH_FADE;
+        }
+      }
+
+      if (!this.swingImpactFired && progress >= COMBAT_CONFIG.IMPACT_POINT) {
+        this.swingImpactFired = true;
+        this.onSwingImpact?.();
+      }
+
+      if (progress >= 1) {
+        this.swinging = false;
+        // The blade reappears where the slash ended and eases back home.
+        this.recovering = true;
+        this.recoverElapsed = 0;
+        const swingNode = this.swingNode;
+        if (swingNode) {
+          this.recoverFromPosition.copyFrom(swingNode.position);
+          this.recoverFromRotation.copyFrom(swingNode.rotationQuaternion!);
+        }
+        this.setBladeVisible(true);
+      }
+    }
+
+    // The afterglow: the finished slash keeps burning for a moment.
+    if (this.slashComplete) {
+      this.slashFade = Math.max(0, this.slashFade - dt);
+      const alpha = this.slashFade / COMBAT_CONFIG.SLASH_FADE;
+      if (alpha > 0) {
+        this.trail.setPath(this.slashPoints, alpha);
+      } else {
+        this.trail.hide();
+      }
+    }
+
+    // The blade drifts back into its resting pose.
+    if (this.recovering) {
+      this.recoverElapsed += dt;
+      const t = clamp(this.recoverElapsed / COMBAT_CONFIG.SLASH_RECOVER, 0, 1);
+      const blend = t * t * (3 - 2 * t);
+      const swingNode = this.swingNode;
+      if (swingNode) {
+        swingNode.position.copyFrom(this.recoverFromPosition).scaleInPlace(1 - blend);
+        BABYLON.Quaternion.SlerpToRef(
+          this.recoverFromRotation,
+          BABYLON.Quaternion.Identity(),
+          blend,
+          swingNode.rotationQuaternion!,
+        );
+      }
+      if (t >= 1) {
+        this.recovering = false;
+        this.resetSwingPose();
+      }
+    }
+  }
+
+  /**
+   * Place the hidden blade so its tip sits exactly on the slash path.
+   *
+   * The blade points along the path, so the tip leads the cut and the
+   * handle trails behind it.
+   */
+  private updateSwingPose(u: number) {
+    const swingNode = this.swingNode;
+    const root = this.root;
+    if (!swingNode || !root) return;
+
+    const tip = slashPoint(u);
+    const bladeDirection = slashTangent(u).normalize();
+
+    // The resting pose (bob, sway, movement state) is the frame the swing
+    // happens in, so the slash is expressed in it.
+    const rootRotation = BABYLON.Quaternion.RotationYawPitchRoll(
+      root.rotation.y,
+      root.rotation.x,
+      root.rotation.z,
+    );
+    const inverseRoot = rootRotation.conjugate();
+
+    const directionLocal = new BABYLON.Vector3();
+    bladeDirection.rotateByQuaternionToRef(inverseRoot, directionLocal);
+
+    const tipTargetLocal = new BABYLON.Vector3();
+    tip.subtract(root.position).rotateByQuaternionToRef(inverseRoot, tipTargetLocal);
+
+    // Turn the blade onto the new direction.
+    const rotation = BABYLON.Quaternion.Identity();
+    BABYLON.Quaternion.FromUnitVectorsToRef(this.bladeAxis, directionLocal, rotation);
+
+    // Put the tip on the path.
+    const rotatedTip = new BABYLON.Vector3();
+    this.tipLocal.rotateByQuaternionToRef(rotation, rotatedTip);
+
+    swingNode.position.copyFrom(tipTargetLocal.subtract(rotatedTip));
+    swingNode.rotationQuaternion!.copyFrom(rotation);
+  }
+
+  /** Put the blade back into its resting pose. */
+  private resetSwingPose() {
+    const swingNode = this.swingNode;
+    if (!swingNode) return;
+    swingNode.position.setAll(0);
+    swingNode.rotationQuaternion!.copyFrom(BABYLON.Quaternion.Identity());
+  }
+
+  /** Sample the slash path up to the given point. */
+  private buildSlashPath(u: number): BABYLON.Vector3[] {
+    const samples = Math.max(2, Math.ceil(u * SLASH_SAMPLES) + 1);
+    const points: BABYLON.Vector3[] = [];
+    for (let i = 0; i < samples; i++) {
+      points.push(slashPoint((i / (samples - 1)) * u));
+    }
+    return points;
   }
 }
 
