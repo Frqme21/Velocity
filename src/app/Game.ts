@@ -89,7 +89,11 @@ export class Game {
       // rendering, so camera.rotation can never lag behind by one frame.
       const playerPosition = this.controller.position;
       this.controller.syncCamera(playerPosition.x, playerPosition.y, playerPosition.z);
-      this.hud.update(this.controller.horizontalSpeed, this.engine.getFps());
+      this.hud.update(
+        this.controller.horizontalSpeed,
+        this.engine.getFps(),
+        this.controller.dashChargeAmount,
+      );
       this.scene.render();
     });
 

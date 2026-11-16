@@ -7,9 +7,10 @@ A minimal Babylon.js + Rapier3D first-person movement sandbox.
 - `W` / `A` / `S` / `D` — move
 - Mouse — look (click the canvas to capture the pointer)
 - `Space` — jump
+- `Shift` — ground dash or air dash when the white meter is full
 - `Esc` — release the pointer
 
-Movement currently has one constant run speed with direct velocity control: pressing a movement key applies the target velocity immediately, and releasing the key stops horizontal movement immediately. The mouse camera also applies raw pointer-lock deltas directly without camera inertia or interpolation.
+Movement uses one constant run speed with momentum-preserving ground and air control. The dash meter below the circular crosshair refills in one second. The mouse camera applies raw pointer-lock deltas directly without camera inertia or interpolation.
 
 ## Development
 

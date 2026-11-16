@@ -6,6 +6,8 @@ export interface InputState {
   jump: boolean;
   /** True only on the frame Space is pressed. */
   jumpPressed: boolean;
+  /** True only on the frame a dash key is pressed. */
+  dashPressed: boolean;
   mouseDX: number;
   mouseDY: number;
 }
@@ -18,6 +20,7 @@ export class InputManager {
   private dx = 0;
   private dy = 0;
   private jumpLatch = false;
+  private dashLatch = false;
   private locked = false;
   private canvas: HTMLCanvasElement;
 
@@ -40,6 +43,9 @@ export class InputManager {
       if (!this.locked) return;
       event.preventDefault();
       if (event.code === 'Space' && !event.repeat) this.jumpLatch = true;
+      if ((event.code === 'ShiftLeft' || event.code === 'ShiftRight') && !event.repeat) {
+        this.dashLatch = true;
+      }
       this.keys.add(event.code);
     });
     window.addEventListener('keyup', (event) => {
@@ -114,6 +120,7 @@ export class InputManager {
     this.dx = 0;
     this.dy = 0;
     this.jumpLatch = false;
+    this.dashLatch = false;
     return state;
   }
 
@@ -125,6 +132,7 @@ export class InputManager {
       right: this.keys.has('KeyD'),
       jump: this.keys.has('Space'),
       jumpPressed: this.jumpLatch,
+      dashPressed: this.dashLatch,
       mouseDX: this.dx,
       mouseDY: this.dy,
     };

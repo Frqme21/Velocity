@@ -13,6 +13,12 @@ const MOVEMENT = {
   GRAVITY: MOVEMENT_CONFIG.GRAVITY,
   FALL_GRAVITY_MULTIPLIER: 1.5,
   JUMP_VELOCITY: MOVEMENT_CONFIG.JUMP_VELOCITY,
+  DASH_RECHARGE_TIME: MOVEMENT_CONFIG.DASH_RECHARGE_TIME,
+  DASH_GROUND_BOOST: MOVEMENT_CONFIG.DASH_GROUND_BOOST,
+  DASH_GROUND_MAX_SPEED: MOVEMENT_CONFIG.DASH_GROUND_MAX_SPEED,
+  DASH_AIR_BOOST: MOVEMENT_CONFIG.DASH_AIR_BOOST,
+  DASH_AIR_MAX_SPEED: MOVEMENT_CONFIG.DASH_AIR_MAX_SPEED,
+  AIR_DASH_LIFT: MOVEMENT_CONFIG.AIR_DASH_LIFT,
   GROUND_STICK: 1.2,
   PLAYER_RADIUS: MOVEMENT_CONFIG.PLAYER_RADIUS,
   PLAYER_HEIGHT: MOVEMENT_CONFIG.PLAYER_HEIGHT,
@@ -59,6 +65,7 @@ export class FirstPersonController {
   private velX = 0;
   private velZ = 0;
   private grounded = false;
+  private dashCharge = 1;
 
   private wallRunning = false;
   private wallRunTime = 0;
@@ -114,6 +121,10 @@ export class FirstPersonController {
   update(dt: number) {
     const input = this.input.read();
     this.wallRunCooldown = Math.max(0, this.wallRunCooldown - dt);
+    this.dashCharge = Math.min(
+      1,
+      this.dashCharge + dt / MOVEMENT.DASH_RECHARGE_TIME,
+    );
 
     const sin = Math.sin(this.yaw);
     const cos = Math.cos(this.yaw);
@@ -149,6 +160,19 @@ export class FirstPersonController {
         const wallHit = this.detectWall(position, cameraForward, right);
         if (wallHit) this.attachWallRun(wallHit, this.vy > 0);
       }
+    }
+
+    if (input.dashPressed && this.dashCharge >= 1) {
+      const hasDirection = wishX !== 0 || wishZ !== 0;
+      const dashX = hasDirection ? wishX : cameraForward.x;
+      const dashZ = hasDirection ? wishZ : cameraForward.z;
+
+      if (this.grounded) {
+        this.applyGroundDash(dashX, dashZ);
+      } else {
+        this.applyAirDash(dashX, dashZ);
+      }
+      this.dashCharge = 0;
     }
 
     const movement = {
@@ -217,6 +241,40 @@ export class FirstPersonController {
     } else {
       this.vy = -MOVEMENT.GROUND_STICK;
     }
+  }
+
+  private applyGroundDash(directionX: number, directionZ: number) {
+    this.velX += directionX * MOVEMENT.DASH_GROUND_BOOST;
+    this.velZ += directionZ * MOVEMENT.DASH_GROUND_BOOST;
+
+    const speed = Math.hypot(this.velX, this.velZ);
+    if (speed > MOVEMENT.DASH_GROUND_MAX_SPEED) {
+      const scale = MOVEMENT.DASH_GROUND_MAX_SPEED / speed;
+      this.velX *= scale;
+      this.velZ *= scale;
+    }
+  }
+
+  private applyAirDash(directionX: number, directionZ: number) {
+    if (this.wallRunning) {
+      this.lastWallColliderHandle = this.wallColliderHandle;
+      this.wallRunCooldown = WALL_RUN.COOLDOWN;
+      this.detachWallRun();
+    }
+
+    this.velX += directionX * MOVEMENT.DASH_AIR_BOOST;
+    this.velZ += directionZ * MOVEMENT.DASH_AIR_BOOST;
+
+    const speed = Math.hypot(this.velX, this.velZ);
+    if (speed > MOVEMENT.DASH_AIR_MAX_SPEED) {
+      const scale = MOVEMENT.DASH_AIR_MAX_SPEED / speed;
+      this.velX *= scale;
+      this.velZ *= scale;
+    }
+
+    // An air dash gives a small, controlled lift so it can cross gaps without
+    // turning into a second jump.
+    this.vy = Math.max(this.vy, MOVEMENT.AIR_DASH_LIFT);
   }
 
   private applyAirMovement(wishX: number, wishZ: number, dt: number) {
@@ -364,6 +422,10 @@ export class FirstPersonController {
 
   get horizontalSpeed(): number {
     return Math.hypot(this.velX, this.velZ);
+  }
+
+  get dashChargeAmount(): number {
+    return this.dashCharge;
   }
 
   get isGrounded(): boolean {
