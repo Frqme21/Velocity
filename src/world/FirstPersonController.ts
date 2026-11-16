@@ -14,19 +14,29 @@ const MOVEMENT = {
   GRAVITY: MOVEMENT_CONFIG.GRAVITY,
   FALL_GRAVITY_MULTIPLIER: 1.5,
   JUMP_VELOCITY: MOVEMENT_CONFIG.JUMP_VELOCITY,
+  COYOTE_TIME: MOVEMENT_CONFIG.COYOTE_TIME,
+  JUMP_GROUND_GRACE: MOVEMENT_CONFIG.JUMP_GROUND_GRACE,
+  DASH_SPEED: MOVEMENT_CONFIG.DASH_SPEED,
+  DASH_DURATION: MOVEMENT_CONFIG.DASH_DURATION,
   DASH_RECHARGE_TIME: MOVEMENT_CONFIG.DASH_RECHARGE_TIME,
-  DASH_GROUND_BOOST: MOVEMENT_CONFIG.DASH_GROUND_BOOST,
-  DASH_GROUND_MAX_SPEED: MOVEMENT_CONFIG.DASH_GROUND_MAX_SPEED,
-  DASH_AIR_BOOST: MOVEMENT_CONFIG.DASH_AIR_BOOST,
-  DASH_AIR_MAX_SPEED: MOVEMENT_CONFIG.DASH_AIR_MAX_SPEED,
-  AIR_DASH_LIFT: MOVEMENT_CONFIG.AIR_DASH_LIFT,
+  DASH_VERTICAL_INFLUENCE: MOVEMENT_CONFIG.DASH_VERTICAL_INFLUENCE,
+  DASH_VERTICAL_DOWN_INFLUENCE: MOVEMENT_CONFIG.DASH_VERTICAL_DOWN_INFLUENCE,
+  DASH_VERTICAL_UP_MAX: MOVEMENT_CONFIG.DASH_VERTICAL_UP_MAX,
+  DASH_VERTICAL_DOWN_MAX: MOVEMENT_CONFIG.DASH_VERTICAL_DOWN_MAX,
+  SENSORY_BOOST_DURATION: MOVEMENT_CONFIG.SENSORY_BOOST_DURATION,
+  SENSORY_BOOST_TIME_SCALE: MOVEMENT_CONFIG.SENSORY_BOOST_TIME_SCALE,
+  SENSORY_BOOST_SIDE_DASH_SPEED: MOVEMENT_CONFIG.SENSORY_BOOST_SIDE_DASH_SPEED,
+  SENSORY_BOOST_SIDE_DASH_DURATION: MOVEMENT_CONFIG.SENSORY_BOOST_SIDE_DASH_DURATION,
+  SENSORY_BOOST_SIDE_DASH_COOLDOWN: MOVEMENT_CONFIG.SENSORY_BOOST_SIDE_DASH_COOLDOWN,
+  SENSORY_BOOST_FORWARD_DASH_SPEED: MOVEMENT_CONFIG.SENSORY_BOOST_FORWARD_DASH_SPEED,
+  SENSORY_BOOST_FORWARD_DASH_DURATION: MOVEMENT_CONFIG.SENSORY_BOOST_FORWARD_DASH_DURATION,
   SLIDE_MIN_SPEED: MOVEMENT_CONFIG.SLIDE_MIN_SPEED,
   SLIDE_STOP_SPEED: MOVEMENT_CONFIG.SLIDE_STOP_SPEED,
-  SLIDE_IMPULSE: MOVEMENT_CONFIG.SLIDE_IMPULSE,
+  SLIDE_BURST_SPEED: MOVEMENT_CONFIG.SLIDE_BURST_SPEED,
   SLIDE_MAX_SPEED: MOVEMENT_CONFIG.SLIDE_MAX_SPEED,
   SLIDE_SLOPE_MAX_SPEED: MOVEMENT_CONFIG.SLIDE_SLOPE_MAX_SPEED,
-  SLIDE_LOW_FRICTION: MOVEMENT_CONFIG.SLIDE_LOW_FRICTION,
-  SLIDE_HIGH_FRICTION: MOVEMENT_CONFIG.SLIDE_HIGH_FRICTION,
+  SLIDE_FLAT_FRICTION: MOVEMENT_CONFIG.SLIDE_FLAT_FRICTION,
+  SLIDE_RAMP_FRICTION: MOVEMENT_CONFIG.SLIDE_RAMP_FRICTION,
   SLIDE_FRICTION_RAMP: MOVEMENT_CONFIG.SLIDE_FRICTION_RAMP,
   SLIDE_COOLDOWN: MOVEMENT_CONFIG.SLIDE_COOLDOWN,
   SLIDE_CARVE_ACCEL: MOVEMENT_CONFIG.SLIDE_CARVE_ACCEL,
@@ -34,17 +44,24 @@ const MOVEMENT = {
   SLIDE_THROTTLE_ACCEL: MOVEMENT_CONFIG.SLIDE_THROTTLE_ACCEL,
   SLIDE_BRAKE_ACCEL: MOVEMENT_CONFIG.SLIDE_BRAKE_ACCEL,
   SLIDE_SLOPE_ACCEL: MOVEMENT_CONFIG.SLIDE_SLOPE_ACCEL,
+  SLIDE_SLOPE_FRICTION_SCALE: MOVEMENT_CONFIG.SLIDE_SLOPE_FRICTION_SCALE,
   SLIDE_HOP_BOOST: MOVEMENT_CONFIG.SLIDE_HOP_BOOST,
   SLIDE_FALL_CONVERSION: MOVEMENT_CONFIG.SLIDE_FALL_CONVERSION,
   SLIDE_FALL_CONVERSION_MAX: MOVEMENT_CONFIG.SLIDE_FALL_CONVERSION_MAX,
   SLIDE_EYE_OFFSET: MOVEMENT_CONFIG.SLIDE_EYE_OFFSET,
+  MANTLE_FORWARD_DISTANCE: MOVEMENT_CONFIG.MANTLE_FORWARD_DISTANCE,
+  MANTLE_UP_DISTANCE: MOVEMENT_CONFIG.MANTLE_UP_DISTANCE,
+  MANTLE_MIN_LEDGE_HEIGHT: MOVEMENT_CONFIG.MANTLE_MIN_LEDGE_HEIGHT,
+  MANTLE_MAX_LEDGE_HEIGHT: MOVEMENT_CONFIG.MANTLE_MAX_LEDGE_HEIGHT,
+  MANTLE_DURATION: MOVEMENT_CONFIG.MANTLE_DURATION,
+  MANTLE_FORWARD_PUSH: MOVEMENT_CONFIG.MANTLE_FORWARD_PUSH,
   CAMERA_HEIGHT_RESPONSE: MOVEMENT_CONFIG.CAMERA_HEIGHT_RESPONSE,
   CAMERA_FOV_RESPONSE: MOVEMENT_CONFIG.CAMERA_FOV_RESPONSE,
   CAMERA_SLIDE_ROLL: MOVEMENT_CONFIG.CAMERA_SLIDE_ROLL,
   BASE_FOV: (90 * Math.PI) / 180,
-  MAX_FOV_WIDEN: (12 * Math.PI) / 180,
-  FOV_SPEED_START: 6,
-  FOV_SPEED_MAX: 17.5,
+  MAX_FOV_WIDEN: (18 * Math.PI) / 180,
+  FOV_SPEED_START: 8,
+  FOV_SPEED_MAX: 32,
   GROUND_STICK: 1.2,
   PLAYER_RADIUS: MOVEMENT_CONFIG.PLAYER_RADIUS,
   PLAYER_HEIGHT: MOVEMENT_CONFIG.PLAYER_HEIGHT,
@@ -76,6 +93,14 @@ interface WallHit {
   distance: number;
 }
 
+interface MantleState {
+  active: boolean;
+  elapsed: number;
+  duration: number;
+  start: BABYLON.Vector3;
+  end: BABYLON.Vector3;
+}
+
 export class FirstPersonController {
   private camera: BABYLON.FreeCamera;
   private world: RAPIER.World;
@@ -91,7 +116,19 @@ export class FirstPersonController {
   private velX = 0;
   private velZ = 0;
   private grounded = false;
+  private coyoteTimer = 0;
+  /** Prevents snap-to-ground from cancelling the first frames of a jump. */
+  private jumpGraceTimer = 0;
   private dashCharge = 1;
+  private dashTimeRemaining = 0;
+  private dashDirection = BABYLON.Vector3.Zero();
+  private sensoryBoostActive = false;
+  private sensoryBoostElapsed = 0;
+  private sensoryBoostDuration = MOVEMENT.SENSORY_BOOST_DURATION;
+  private sensoryBoostSideCooldown = 0;
+  private timeScale = 1;
+  private sensoryDashTime = 0;
+  private sensoryDashVelocity = BABYLON.Vector3.Zero();
   private sliding = false;
   private slideElapsed = 0;
   private slideDirectionX = 0;
@@ -113,6 +150,14 @@ export class FirstPersonController {
   private wallSideSign = 0;
   private wallEntryRising = false;
   private cameraRoll = 0;
+
+  private mantle: MantleState = {
+    active: false,
+    elapsed: 0,
+    duration: MOVEMENT.MANTLE_DURATION,
+    start: BABYLON.Vector3.Zero(),
+    end: BABYLON.Vector3.Zero(),
+  };
 
   public sensitivity = MOVEMENT.SENSITIVITY;
 
@@ -138,10 +183,10 @@ export class FirstPersonController {
 
     this.charController = world.createCharacterController(0.01);
     this.charController.setUp({ x: 0, y: 1, z: 0 });
-    this.charController.enableAutostep(0.5, 0.2, true);
+    this.charController.enableAutostep(0.5, 0.35, true);
     this.charController.enableSnapToGround(0.5);
-    this.charController.setMaxSlopeClimbAngle((50 * Math.PI) / 180);
-    this.charController.setMinSlopeSlideAngle((30 * Math.PI) / 180);
+    this.charController.setMaxSlopeClimbAngle((55 * Math.PI) / 180);
+    this.charController.setMinSlopeSlideAngle((35 * Math.PI) / 180);
 
     this.input.onMouseDelta = (dx, dy) => this.applyLookDelta(dx, dy);
   }
@@ -156,12 +201,31 @@ export class FirstPersonController {
 
   update(dt: number) {
     const input = this.input.read();
-    this.wallRunCooldown = Math.max(0, this.wallRunCooldown - dt);
-    this.slideCooldown = Math.max(0, this.slideCooldown - dt);
-    this.dashCharge = Math.min(
-      1,
-      this.dashCharge + dt / MOVEMENT.DASH_RECHARGE_TIME,
-    );
+
+    // Air Shift starts a slow-motion sensory boost instead of an air dash.
+    if (
+      !this.sensoryBoostActive
+      && input.dashPressed
+      && this.dashCharge >= 1
+      && !this.grounded
+      && !this.mantle.active
+      && !this.sliding
+    ) {
+      this.startSensoryBoost();
+    }
+
+    const scaledDt = dt * this.timeScale;
+    this.wallRunCooldown = Math.max(0, this.wallRunCooldown - scaledDt);
+    this.slideCooldown = Math.max(0, this.slideCooldown - scaledDt);
+    this.dashTimeRemaining = Math.max(0, this.dashTimeRemaining - scaledDt);
+    this.jumpGraceTimer = Math.max(0, this.jumpGraceTimer - scaledDt);
+    this.sensoryBoostSideCooldown = Math.max(0, this.sensoryBoostSideCooldown - dt);
+    if (!this.sensoryBoostActive) {
+      this.dashCharge = Math.min(
+        1,
+        this.dashCharge + scaledDt / MOVEMENT.DASH_RECHARGE_TIME,
+      );
+    }
 
     if (!input.slide) {
       this.slideHeldConsumed = false;
@@ -170,10 +234,16 @@ export class FirstPersonController {
       this.slideRequestBuffered = true;
     }
 
-    const sin = Math.sin(this.yaw);
-    const cos = Math.cos(this.yaw);
-    const cameraForward = new BABYLON.Vector3(sin, 0, cos);
-    const right = new BABYLON.Vector3(cos, 0, -sin);
+    const sinYaw = Math.sin(this.yaw);
+    const cosYaw = Math.cos(this.yaw);
+    const cosPitch = Math.cos(this.pitch);
+    const cameraForwardFlat = new BABYLON.Vector3(sinYaw, 0, cosYaw);
+    const lookDirection = new BABYLON.Vector3(
+      sinYaw * cosPitch,
+      -Math.sin(this.pitch),
+      cosYaw * cosPitch,
+    ).normalize();
+    const right = new BABYLON.Vector3(cosYaw, 0, -sinYaw);
 
     let forward = 0;
     let strafe = 0;
@@ -182,8 +252,8 @@ export class FirstPersonController {
     if (input.right) strafe += 1;
     if (input.left) strafe -= 1;
 
-    let wishX = forward * sin + strafe * cos;
-    let wishZ = forward * cos - strafe * sin;
+    let wishX = forward * sinYaw + strafe * cosYaw;
+    let wishZ = forward * cosYaw - strafe * sinYaw;
     const wishLength = Math.hypot(wishX, wishZ);
     if (wishLength > 0) {
       wishX /= wishLength;
@@ -194,122 +264,421 @@ export class FirstPersonController {
     const wasGrounded = this.grounded;
     let slideJumpTriggered = false;
 
-    if (this.grounded) {
-      this.detachWallRun();
+    // Landing cancels the boost without the exit dash.
+    if (this.sensoryBoostActive && this.grounded) {
+      this.cancelSensoryBoost();
+    }
 
-      if (input.jumpPressed) {
+    if (this.sensoryBoostActive) {
+      this.updateSensoryBoost(dt, input, right, wishX, wishZ);
+    } else if (this.mantle.active) {
+      this.updateMantle(scaledDt, position);
+    } else {
+      if (input.dashPressed && this.dashCharge >= 1) {
+        this.startDash(lookDirection);
+      }
+
+      if (this.dashTimeRemaining > 0) {
+        this.applyDashVelocity();
+      }
+
+      const canUseCoyoteJump = this.coyoteTimer > 0;
+
+      if (this.grounded) {
+        this.coyoteTimer = MOVEMENT.COYOTE_TIME;
+        this.detachWallRun();
+      } else {
+        this.coyoteTimer = Math.max(0, this.coyoteTimer - scaledDt);
+        if (this.sliding) this.endSlide(true);
+      }
+
+      const canJump = (this.grounded || canUseCoyoteJump) && this.dashTimeRemaining <= 0 && !this.mantle.active;
+      if (input.jumpPressed && canJump) {
         if (this.sliding) {
           this.endSlide(true);
-          this.velX += this.slideDirectionX * MOVEMENT.SLIDE_HOP_BOOST;
-          this.velZ += this.slideDirectionZ * MOVEMENT.SLIDE_HOP_BOOST;
-          this.vy = MOVEMENT.JUMP_VELOCITY;
-          slideJumpTriggered = true;
+          const slideSpeed = Math.hypot(this.velX, this.velZ);
+          const comboSpeed = Math.max(slideSpeed, this.horizontalSpeed);
+          const dirX = this.slideDirectionX || cameraForwardFlat.x;
+          const dirZ = this.slideDirectionZ || cameraForwardFlat.z;
+          this.velX = dirX * (comboSpeed + MOVEMENT.SLIDE_HOP_BOOST);
+          this.velZ = dirZ * (comboSpeed + MOVEMENT.SLIDE_HOP_BOOST);
+        }
+        this.vy = MOVEMENT.JUMP_VELOCITY;
+        this.coyoteTimer = 0;
+        this.jumpGraceTimer = MOVEMENT.JUMP_GROUND_GRACE;
+        this.grounded = false;
+        slideJumpTriggered = true;
+      }
+
+      if (this.grounded) {
+        if (!input.slide && this.sliding) {
+          this.endSlide(false);
+        }
+
+        if (
+          !slideJumpTriggered
+          && this.slideRequestBuffered
+          && !this.sliding
+          && !this.slideHeldConsumed
+          && this.slideCooldown <= 0
+          && Math.hypot(this.velX, this.velZ) >= MOVEMENT.SLIDE_MIN_SPEED
+        ) {
+          const direction = this.getSlideEntryDirection(wishX, wishZ, cameraForwardFlat);
+          this.startSlide(direction.x, direction.z, 0);
+        }
+
+        if (this.sliding) {
+          this.applySlideMovement(forward, strafe, right, scaledDt);
+        } else if (!slideJumpTriggered && this.dashTimeRemaining <= 0) {
+          this.applyGroundMovement(wishX, wishZ, false, scaledDt);
+        }
+        // While dashing, keep the vertical dash velocity (ground stick would
+        // cancel upward or downward look-driven dashes).
+      } else {
+        if (this.dashTimeRemaining <= 0) {
+          this.applyAirMovement(wishX, wishZ, scaledDt);
+
+          if (this.wallRunning) {
+            this.updateWallRun(input.jumpPressed, scaledDt);
+          } else if (input.forward && this.wallRunCooldown <= 0) {
+            const wallHit = this.detectWall(position, cameraForwardFlat, right);
+            if (wallHit) this.attachWallRun(wallHit, this.vy > 0);
+          }
+
+          if (!this.wallRunning && this.tryMantle(position, cameraForwardFlat, input.forward || input.jump)) {
+            // Mantle started; skip normal integration movement this frame after setup.
+          }
         }
       }
 
-      if (!input.slide && this.sliding) {
-        this.endSlide(false);
-      }
-
-      if (
-        !input.jumpPressed
-        && this.slideRequestBuffered
-        && !this.sliding
-        && !this.slideHeldConsumed
-        && this.slideCooldown <= 0
-        && Math.hypot(this.velX, this.velZ) >= MOVEMENT.SLIDE_MIN_SPEED
-      ) {
-        const direction = this.getSlideEntryDirection(wishX, wishZ, cameraForward);
-        this.startSlide(direction.x, direction.z, 0);
-      }
-
-      if (this.sliding) {
-        this.applySlideMovement(forward, strafe, right, dt);
-      } else if (!slideJumpTriggered) {
-        this.applyGroundMovement(wishX, wishZ, input.jumpPressed, dt);
-      }
-    } else {
-      if (this.sliding) this.endSlide(true);
-      this.applyAirMovement(wishX, wishZ, dt);
-
-      if (this.wallRunning) {
-        this.updateWallRun(input.jumpPressed, dt);
-      } else if (input.forward && this.wallRunCooldown <= 0) {
-        const wallHit = this.detectWall(position, cameraForward, right);
-        if (wallHit) this.attachWallRun(wallHit, this.vy > 0);
+      if (this.dashTimeRemaining > 0) {
+        // Keep dash velocity authoritative during the dash window.
+        this.detachWallRun();
       }
     }
 
-    if (input.dashPressed && this.dashCharge >= 1) {
-      const hasDirection = wishX !== 0 || wishZ !== 0;
-      const dashX = hasDirection ? wishX : cameraForward.x;
-      const dashZ = hasDirection ? wishZ : cameraForward.z;
-
-      this.endSlide(false);
-      if (this.grounded) {
-        this.applyGroundDash(dashX, dashZ);
-      } else {
-        this.applyAirDash(dashX, dashZ);
-      }
-      this.dashCharge = 0;
+    // Sensory side/exit dashes are applied in real time so they still feel
+    // responsive while the rest of the movement is slowed down.
+    let extraMoveX = 0;
+    let extraMoveY = 0;
+    let extraMoveZ = 0;
+    if (this.sensoryDashTime > 0) {
+      extraMoveX = this.sensoryDashVelocity.x * dt;
+      extraMoveY = this.sensoryDashVelocity.y * dt;
+      extraMoveZ = this.sensoryDashVelocity.z * dt;
+      this.sensoryDashTime = Math.max(0, this.sensoryDashTime - dt);
     }
 
     const fallSpeedBeforeLanding = !wasGrounded ? Math.max(0, -this.vy) : 0;
-    const movement = {
-      x: this.velX * dt,
-      y: this.vy * dt,
-      z: this.velZ * dt,
+    const movement = this.mantle.active
+      ? { x: 0, y: 0, z: 0 }
+      : {
+        x: this.velX * scaledDt + extraMoveX,
+        y: this.vy * scaledDt + extraMoveY,
+        z: this.velZ * scaledDt + extraMoveZ,
+      };
+
+    if (!this.mantle.active) {
+      // Snap-to-ground keeps the controller glued to slopes, but it would
+      // also swallow the first frames of a jump as a tiny 0.01m hop.
+      // Disable it while rising and during the short post-jump grace window.
+      if (this.vy > 0 || this.jumpGraceTimer > 0) {
+        this.charController.disableSnapToGround();
+      } else {
+        this.charController.enableSnapToGround(0.5);
+      }
+
+      this.charController.computeColliderMovement(this.collider, movement);
+      const corrected = this.charController.computedMovement();
+
+      const blockedBelow = movement.y < 0 && corrected.y > movement.y * 0.5;
+      // A real landing ends the grace window immediately.
+      if (this.jumpGraceTimer > 0 && blockedBelow && this.vy <= 0) {
+        this.jumpGraceTimer = 0;
+      }
+      const groundedByController = blockedBelow || this.charController.computedGrounded();
+      this.grounded = this.jumpGraceTimer > 0 ? false : groundedByController;
+      if (blockedBelow) {
+        this.vy = 0;
+      } else if (movement.y < 0) {
+        this.vy = corrected.y / Math.max(scaledDt, 0.0001);
+      }
+
+      const justLanded = !wasGrounded && this.grounded;
+      if (justLanded) {
+        this.coyoteTimer = MOVEMENT.COYOTE_TIME;
+        if (this.sensoryBoostActive) this.cancelSensoryBoost();
+      }
+      if (
+        justLanded
+        && input.slide
+        && !input.jumpPressed
+        && !this.sliding
+        && !this.slideHeldConsumed
+      ) {
+        const direction = this.getSlideEntryDirection(wishX, wishZ, cameraForwardFlat);
+        this.startSlide(direction.x, direction.z, fallSpeedBeforeLanding);
+      }
+
+      this.body.setNextKinematicTranslation({
+        x: position.x + corrected.x,
+        y: position.y + corrected.y,
+        z: position.z + corrected.z,
+      });
+
+      const wallRollTarget = this.wallRunning ? -this.wallSideSign * WALL_RUN.ROLL : 0;
+      const wallRollBlend = 1 - Math.exp(-WALL_RUN.ROLL_RESPONSE * dt);
+      this.cameraRoll += (wallRollTarget - this.cameraRoll) * wallRollBlend;
+
+      this.updateCameraEffects(dt, right);
+      this.syncCamera(position.x + corrected.x, position.y + corrected.y, position.z + corrected.z);
+    } else {
+      const t = this.body.translation();
+      this.updateCameraEffects(dt, right);
+      this.syncCamera(t.x, t.y, t.z);
+    }
+  }
+
+  private getLookDirection(): BABYLON.Vector3 {
+    const cosPitch = Math.cos(this.pitch);
+    return new BABYLON.Vector3(
+      Math.sin(this.yaw) * cosPitch,
+      -Math.sin(this.pitch),
+      Math.cos(this.yaw) * cosPitch,
+    ).normalize();
+  }
+
+  private startDash(direction: BABYLON.Vector3) {
+    this.endSlide(false);
+    this.detachWallRun();
+    this.dashDirection.copyFrom(direction.normalize());
+    this.dashTimeRemaining = MOVEMENT.DASH_DURATION;
+    this.dashCharge = 0;
+    this.coyoteTimer = 0;
+    this.applyDashVelocity();
+  }
+
+  private applyDashVelocity() {
+    this.velX = this.dashDirection.x * MOVEMENT.DASH_SPEED;
+    this.velZ = this.dashDirection.z * MOVEMENT.DASH_SPEED;
+    this.vy = this.getDashVerticalVelocity(this.dashDirection.y);
+  }
+
+  /** Vertical dash component driven by pitch: look up to rise, down to dive. */
+  private getDashVerticalVelocity(lookY: number): number {
+    const vertical = lookY * MOVEMENT.DASH_SPEED;
+    return vertical >= 0
+      ? Math.min(vertical * MOVEMENT.DASH_VERTICAL_INFLUENCE, MOVEMENT.DASH_VERTICAL_UP_MAX)
+      : Math.max(vertical * MOVEMENT.DASH_VERTICAL_DOWN_INFLUENCE, -MOVEMENT.DASH_VERTICAL_DOWN_MAX);
+  }
+
+  /**
+   * Enter the air-only sensory boost. World/player physics slow to a crawl,
+   * the HUD meter drains over the boost window, A/D nudge sideways, and the
+   * boost ends with a short forward dash.
+   */
+  private startSensoryBoost() {
+    this.sensoryBoostActive = true;
+    this.sensoryBoostElapsed = 0;
+    this.sensoryBoostSideCooldown = 0;
+    this.dashCharge = 1;
+    this.timeScale = 1;
+    this.sensoryDashTime = 0;
+    this.detachWallRun();
+    this.endSlide(false);
+  }
+
+  private updateSensoryBoost(
+    dt: number,
+    input: ReturnType<InputManager['read']>,
+    right: BABYLON.Vector3,
+    wishX: number,
+    wishZ: number,
+  ) {
+    this.sensoryBoostElapsed += dt;
+    const progress = Math.min(1, this.sensoryBoostElapsed / this.sensoryBoostDuration);
+    // The dash meter doubles as the boost timer and drains right to left.
+    this.dashCharge = 1 - progress;
+
+    // Ease into slow motion over the first quarter second.
+    const ramp = Math.min(1, this.sensoryBoostElapsed / 0.25);
+    const eased = ramp * ramp * (3 - 2 * ramp);
+    this.timeScale = BABYLON.Scalar.Lerp(
+      1,
+      MOVEMENT.SENSORY_BOOST_TIME_SCALE,
+      eased,
+    );
+
+    this.applyAirMovement(wishX, wishZ, dt * this.timeScale);
+
+    if (input.leftPressed && this.sensoryBoostSideCooldown <= 0) {
+      this.startSensorySideDash(-1, right);
+    } else if (input.rightPressed && this.sensoryBoostSideCooldown <= 0) {
+      this.startSensorySideDash(1, right);
+    }
+
+    if (!input.dashHeld || progress >= 1) {
+      this.finishSensoryBoost();
+    }
+  }
+
+  private startSensorySideDash(sign: number, right: BABYLON.Vector3) {
+    const speed = MOVEMENT.SENSORY_BOOST_SIDE_DASH_SPEED;
+    this.sensoryDashVelocity.set(right.x * sign * speed, 0, right.z * sign * speed);
+    this.sensoryDashTime = MOVEMENT.SENSORY_BOOST_SIDE_DASH_DURATION;
+    this.sensoryBoostSideCooldown = MOVEMENT.SENSORY_BOOST_SIDE_DASH_COOLDOWN;
+
+    // A smaller velocity nudge carries through the slow motion after the burst.
+    this.velX += right.x * sign * speed * 0.4;
+    this.velZ += right.z * sign * speed * 0.4;
+  }
+
+  /** End the boost early or on timeout: restore time and dash forward. */
+  private finishSensoryBoost() {
+    if (!this.sensoryBoostActive) return;
+
+    this.sensoryBoostActive = false;
+    this.sensoryBoostElapsed = 0;
+    this.dashCharge = 0;
+    this.timeScale = 1;
+
+    const look = this.getLookDirection();
+    const forward = new BABYLON.Vector3(look.x, 0, look.z);
+    if (forward.lengthSquared() < 0.0001) forward.copyFrom(BABYLON.Axis.Z);
+    forward.normalize();
+
+    const speed = MOVEMENT.SENSORY_BOOST_FORWARD_DASH_SPEED;
+    const vertical = this.getDashVerticalVelocity(look.y);
+    this.velX = forward.x * speed;
+    this.velZ = forward.z * speed;
+    this.vy = vertical;
+    this.sensoryDashVelocity.set(forward.x * speed, vertical, forward.z * speed);
+    this.sensoryDashTime = MOVEMENT.SENSORY_BOOST_FORWARD_DASH_DURATION;
+  }
+
+  /** Landed mid-boost: restore time without the exit dash. */
+  private cancelSensoryBoost() {
+    if (!this.sensoryBoostActive) return;
+
+    this.sensoryBoostActive = false;
+    this.sensoryBoostElapsed = 0;
+    this.dashCharge = 0;
+    this.timeScale = 1;
+    this.sensoryDashTime = 0;
+  }
+
+  private tryMantle(
+    position: { x: number; y: number; z: number },
+    forward: BABYLON.Vector3,
+    wantsMantle: boolean,
+  ): boolean {
+    if (!wantsMantle || this.mantle.active || this.wallRunning || this.sliding) return false;
+    if (this.vy > 6) return false;
+
+    const dir = new BABYLON.Vector3(forward.x, 0, forward.z);
+    if (dir.lengthSquared() < 0.0001) return false;
+    dir.normalize();
+
+    // position.y is the body/capsule center. Probes are tuned around that:
+    // eye/head-level wall check, outstretched-hands open-air check, and a
+    // forgiving chest-level grab check so ledges can be caught from lower down
+    // without snapping onto waist-high obstacles.
+    const standOffset = MOVEMENT.PLAYER_HEIGHT / 2;
+    const eyeY = position.y + 0.7;
+    const upperChestY = position.y + 0.35;
+    const lowerChestY = position.y + 0.05;
+    const ceilingY = position.y + 1.2;
+    const rayDir = { x: dir.x, y: 0, z: dir.z };
+
+    const castForward = (y: number, distance: number) =>
+      this.world.castRay(
+        new RAPIER.Ray({ x: position.x, y, z: position.z }, rayDir),
+        distance,
+        true,
+        undefined,
+        undefined,
+        this.collider,
+        this.body,
+      );
+
+    const wallHit = castForward(eyeY, MOVEMENT.MANTLE_FORWARD_DISTANCE)
+      ?? castForward(upperChestY, MOVEMENT.MANTLE_FORWARD_DISTANCE)
+      ?? castForward(lowerChestY, MOVEMENT.MANTLE_FORWARD_DISTANCE);
+    if (!wallHit) return false;
+
+    const clearanceHit = castForward(ceilingY, MOVEMENT.MANTLE_FORWARD_DISTANCE + 0.15);
+    if (clearanceHit) return false;
+
+    const surfaceOrigin = {
+      x: position.x + dir.x * (wallHit.timeOfImpact + MOVEMENT.PLAYER_RADIUS + 0.2),
+      y: position.y + MOVEMENT.MANTLE_MAX_LEDGE_HEIGHT + 0.9,
+      z: position.z + dir.z * (wallHit.timeOfImpact + MOVEMENT.PLAYER_RADIUS + 0.2),
     };
+    const surfaceHit = this.world.castRayAndGetNormal(
+      new RAPIER.Ray(surfaceOrigin, { x: 0, y: -1, z: 0 }),
+      MOVEMENT.MANTLE_UP_DISTANCE + 0.8,
+      true,
+      undefined,
+      undefined,
+      this.collider,
+      this.body,
+    );
+    if (!surfaceHit || surfaceHit.normal.y < 0.72) return false;
 
-    this.charController.computeColliderMovement(this.collider, movement);
-    const corrected = this.charController.computedMovement();
-
-    const blockedBelow = movement.y < 0 && corrected.y > movement.y * 0.5;
-    this.grounded = blockedBelow || this.charController.computedGrounded();
-    if (blockedBelow) {
-      this.vy = 0;
-    } else if (movement.y < 0) {
-      this.vy = corrected.y / dt;
+    const ledgeSurfaceY = surfaceOrigin.y - surfaceHit.timeOfImpact;
+    const targetBodyY = ledgeSurfaceY + standOffset;
+    const climbHeight = targetBodyY - position.y;
+    if (climbHeight < MOVEMENT.MANTLE_MIN_LEDGE_HEIGHT || climbHeight > MOVEMENT.MANTLE_MAX_LEDGE_HEIGHT + 0.25) {
+      return false;
     }
 
-    const justLanded = !wasGrounded && this.grounded;
-    if (
-      justLanded
-      && input.slide
-      && !input.jumpPressed
-      && !this.sliding
-      && !this.slideHeldConsumed
-    ) {
-      const direction = this.getSlideEntryDirection(wishX, wishZ, cameraForward);
-      this.startSlide(direction.x, direction.z, fallSpeedBeforeLanding);
+    this.mantle.active = true;
+    this.mantle.elapsed = 0;
+    this.mantle.duration = MOVEMENT.MANTLE_DURATION;
+    this.mantle.start.set(position.x, position.y, position.z);
+    this.mantle.end.set(
+      position.x + dir.x * MOVEMENT.MANTLE_FORWARD_PUSH,
+      targetBodyY,
+      position.z + dir.z * MOVEMENT.MANTLE_FORWARD_PUSH,
+    );
+    this.velX = 0;
+    this.velZ = 0;
+    this.vy = 0;
+    this.detachWallRun();
+    this.endSlide(false);
+    return true;
+  }
+
+  private updateMantle(dt: number, _position: { x: number; y: number; z: number }) {
+    this.mantle.elapsed += dt;
+    const t = Math.min(1, this.mantle.elapsed / this.mantle.duration);
+    const smooth = t * t * (3 - 2 * t);
+    const x = BABYLON.Scalar.Lerp(this.mantle.start.x, this.mantle.end.x, smooth);
+    const y = BABYLON.Scalar.Lerp(this.mantle.start.y, this.mantle.end.y, smooth);
+    const z = BABYLON.Scalar.Lerp(this.mantle.start.z, this.mantle.end.z, smooth);
+
+    this.body.setNextKinematicTranslation({ x, y, z });
+    this.velX = 0;
+    this.velZ = 0;
+    this.vy = 0;
+    this.grounded = false;
+
+    if (t >= 1) {
+      this.mantle.active = false;
+      this.body.setNextKinematicTranslation({
+        x: this.mantle.end.x,
+        y: this.mantle.end.y,
+        z: this.mantle.end.z,
+      });
+      this.grounded = true;
+      this.coyoteTimer = MOVEMENT.COYOTE_TIME;
     }
-
-    // Keep the movement velocity independent from Rapier's collision
-    // correction. The corrected translation controls the player's position,
-    // but copying it back into velocity can erase momentum when the capsule
-    // merely brushes a surface (especially the wall-run panels).
-    this.body.setNextKinematicTranslation({
-      x: position.x + corrected.x,
-      y: position.y + corrected.y,
-      z: position.z + corrected.z,
-    });
-
-    const wallRollTarget = this.wallRunning ? -this.wallSideSign * WALL_RUN.ROLL : 0;
-    const wallRollBlend = 1 - Math.exp(-WALL_RUN.ROLL_RESPONSE * dt);
-    this.cameraRoll += (wallRollTarget - this.cameraRoll) * wallRollBlend;
-
-    this.updateCameraEffects(dt, right);
-    this.syncCamera(position.x + corrected.x, position.y + corrected.y, position.z + corrected.z);
   }
 
   private applyGroundMovement(wishX: number, wishZ: number, jumpPressed: boolean, dt: number) {
     const hasMovementInput = wishX !== 0 || wishZ !== 0;
     const speed = Math.hypot(this.velX, this.velZ);
 
-    // Ground friction is applied when the player releases movement input, or
-    // when momentum is above the target running speed. While steering, the
-    // existing velocity is retained so a stray collision cannot make running
-    // feel as though the player suddenly stops dead.
     if ((!hasMovementInput || speed > MOVEMENT.RUN_SPEED) && speed > 0.001) {
       const drop = Math.max(speed, MOVEMENT.STOP_SPEED) * MOVEMENT.FRICTION * dt;
       const scale = Math.max(0, speed - drop) / speed;
@@ -327,8 +696,10 @@ export class FirstPersonController {
       }
     }
 
-    if (jumpPressed) {
+    if (jumpPressed && this.coyoteTimer > 0) {
       this.vy = MOVEMENT.JUMP_VELOCITY;
+      this.coyoteTimer = 0;
+      this.grounded = false;
     } else {
       this.vy = -MOVEMENT.GROUND_STICK;
     }
@@ -367,16 +738,10 @@ export class FirstPersonController {
       fallSpeed * MOVEMENT.SLIDE_FALL_CONVERSION,
       MOVEMENT.SLIDE_FALL_CONVERSION_MAX,
     );
-    const impulse = MOVEMENT.SLIDE_IMPULSE + fallBoost;
-    this.velX += this.slideDirectionX * impulse;
-    this.velZ += this.slideDirectionZ * impulse;
-
-    const speed = Math.hypot(this.velX, this.velZ);
-    if (speed > MOVEMENT.SLIDE_MAX_SPEED) {
-      const scale = MOVEMENT.SLIDE_MAX_SPEED / speed;
-      this.velX *= scale;
-      this.velZ *= scale;
-    }
+    const currentSpeed = Math.hypot(this.velX, this.velZ);
+    const targetSpeed = Math.max(currentSpeed, MOVEMENT.SLIDE_BURST_SPEED + fallBoost);
+    this.velX = this.slideDirectionX * targetSpeed;
+    this.velZ = this.slideDirectionZ * targetSpeed;
   }
 
   private endSlide(allowLandingBuffer: boolean) {
@@ -396,9 +761,6 @@ export class FirstPersonController {
   ) {
     this.slideElapsed += dt;
 
-    // Steering gradually rotates both the locked slide direction and the
-    // current velocity. This preserves momentum while still allowing the
-    // player to carve out of a slide instead of being forced into a rail.
     if (strafe !== 0) {
       const desiredX = cameraRight.x * strafe;
       const desiredZ = cameraRight.z * strafe;
@@ -424,35 +786,36 @@ export class FirstPersonController {
 
     const groundNormal = this.getGroundNormal();
     const slopeAmount = Math.max(0, Math.min(1, (1 - groundNormal.y) / 0.7));
+    const downhillAmount = this.getDownhillAmount(groundNormal);
     const speedCap = MOVEMENT.SLIDE_MAX_SPEED
       + (MOVEMENT.SLIDE_SLOPE_MAX_SPEED - MOVEMENT.SLIDE_MAX_SPEED) * slopeAmount;
 
-    // Project gravity onto the ground plane. On flat ground this is zero;
-    // on a slope it produces a downhill acceleration vector.
-    const gravity = new BABYLON.Vector3(0, -MOVEMENT.GRAVITY * MOVEMENT.SLIDE_SLOPE_ACCEL, 0);
+    // Project gravity onto the ground plane and boost downhill slides.
+    const gravity = new BABYLON.Vector3(0, -MOVEMENT.GRAVITY, 0);
     const gravityNormalComponent = BABYLON.Vector3.Dot(gravity, groundNormal);
     const slopeAcceleration = gravity.subtract(groundNormal.scale(gravityNormalComponent));
-    this.velX += slopeAcceleration.x * dt;
-    this.velZ += slopeAcceleration.z * dt;
+    const slopeBoost = 1 + downhillAmount * MOVEMENT.SLIDE_SLOPE_ACCEL;
+    this.velX += slopeAcceleration.x * slopeBoost * dt;
+    this.velZ += slopeAcceleration.z * slopeBoost * dt;
 
     const rampProgress = Math.max(0, Math.min(
       1,
-      (this.slideElapsed - 0.4) / MOVEMENT.SLIDE_FRICTION_RAMP,
+      (this.slideElapsed - 0.25) / MOVEMENT.SLIDE_FRICTION_RAMP,
     ));
     const smoothRamp = rampProgress * rampProgress * (3 - 2 * rampProgress);
-    const friction = MOVEMENT.SLIDE_LOW_FRICTION
-      + (MOVEMENT.SLIDE_HIGH_FRICTION - MOVEMENT.SLIDE_LOW_FRICTION) * smoothRamp;
+    let friction = MOVEMENT.SLIDE_FLAT_FRICTION
+      + (MOVEMENT.SLIDE_RAMP_FRICTION - MOVEMENT.SLIDE_FLAT_FRICTION) * smoothRamp;
+    // On downhill slopes, remove most friction so slope accel adds speed.
+    friction *= 1 - downhillAmount * (1 - MOVEMENT.SLIDE_SLOPE_FRICTION_SCALE);
 
     const speed = Math.hypot(this.velX, this.velZ);
-    if (speed > 0.001) {
+    if (speed > 0.001 && friction > 0) {
       const drop = speed * friction * dt;
       const scale = Math.max(0, speed - drop) / speed;
       this.velX *= scale;
       this.velZ *= scale;
     }
 
-    // The main slide direction remains locked. Only a small lateral carve is
-    // allowed, perpendicular to that direction.
     if (strafe !== 0) {
       const carveX = cameraRight.x * strafe;
       const carveZ = cameraRight.z * strafe;
@@ -468,10 +831,7 @@ export class FirstPersonController {
         0,
         this.velX * this.slideDirectionX + this.velZ * this.slideDirectionZ,
       );
-      const braking = Math.min(
-        MOVEMENT.SLIDE_BRAKE_ACCEL * dt,
-        forwardSpeed,
-      );
+      const braking = Math.min(MOVEMENT.SLIDE_BRAKE_ACCEL * dt, forwardSpeed);
       this.velX -= this.slideDirectionX * braking;
       this.velZ -= this.slideDirectionZ * braking;
     }
@@ -486,6 +846,20 @@ export class FirstPersonController {
     if (Math.hypot(this.velX, this.velZ) < MOVEMENT.SLIDE_STOP_SPEED) {
       this.endSlide(false);
     }
+  }
+
+  private getDownhillAmount(groundNormal: BABYLON.Vector3): number {
+    const gravity = new BABYLON.Vector3(0, -1, 0);
+    const gravityNormalComponent = BABYLON.Vector3.Dot(gravity, groundNormal);
+    const slopeDir = gravity.subtract(groundNormal.scale(gravityNormalComponent));
+    const slopeLen = slopeDir.length();
+    if (slopeLen < 0.0001) return 0;
+    slopeDir.scaleInPlace(1 / slopeLen);
+    const vel = new BABYLON.Vector3(this.velX, 0, this.velZ);
+    const velLen = vel.length();
+    if (velLen < 0.0001) return 0;
+    vel.scaleInPlace(1 / velLen);
+    return Math.max(0, BABYLON.Vector3.Dot(vel, slopeDir));
   }
 
   private getGroundNormal(): BABYLON.Vector3 {
@@ -508,44 +882,7 @@ export class FirstPersonController {
     return new BABYLON.Vector3(hit.normal.x, hit.normal.y, hit.normal.z).normalize();
   }
 
-  private applyGroundDash(directionX: number, directionZ: number) {
-    this.velX += directionX * MOVEMENT.DASH_GROUND_BOOST;
-    this.velZ += directionZ * MOVEMENT.DASH_GROUND_BOOST;
-
-    const speed = Math.hypot(this.velX, this.velZ);
-    if (speed > MOVEMENT.DASH_GROUND_MAX_SPEED) {
-      const scale = MOVEMENT.DASH_GROUND_MAX_SPEED / speed;
-      this.velX *= scale;
-      this.velZ *= scale;
-    }
-  }
-
-  private applyAirDash(directionX: number, directionZ: number) {
-    if (this.wallRunning) {
-      this.lastWallColliderHandle = this.wallColliderHandle;
-      this.wallRunCooldown = WALL_RUN.COOLDOWN;
-      this.detachWallRun();
-    }
-
-    this.velX += directionX * MOVEMENT.DASH_AIR_BOOST;
-    this.velZ += directionZ * MOVEMENT.DASH_AIR_BOOST;
-
-    const speed = Math.hypot(this.velX, this.velZ);
-    if (speed > MOVEMENT.DASH_AIR_MAX_SPEED) {
-      const scale = MOVEMENT.DASH_AIR_MAX_SPEED / speed;
-      this.velX *= scale;
-      this.velZ *= scale;
-    }
-
-    // An air dash gives a small, controlled lift so it can cross gaps without
-    // turning into a second jump.
-    this.vy = Math.max(this.vy, MOVEMENT.AIR_DASH_LIFT);
-  }
-
   private applyAirMovement(wishX: number, wishZ: number, dt: number) {
-    // Source-style air steering. The capped acceleration adds a small amount
-    // of wish speed, while the turn-rate steering rotates existing momentum
-    // toward the requested direction without throwing that momentum away.
     if (wishX !== 0 || wishZ !== 0) {
       const speed = Math.hypot(this.velX, this.velZ);
       if (speed > 0.5) {
@@ -610,14 +947,21 @@ export class FirstPersonController {
       const colliderHandle = hit.collider.handle;
       if (colliderHandle === this.lastWallColliderHandle && this.wallRunCooldown > 0) return;
 
-      // Rapier's ray normal points out of the wall and toward the player.
-      // This is the outward gameplay normal used for wall jumps; its negative
-      // provides the small inward pull that keeps the capsule against a wall.
       const normal = new BABYLON.Vector3(hit.normal.x, 0, hit.normal.z).normalize();
       const tangent = BABYLON.Vector3.Cross(normal, BABYLON.Axis.Y).normalize();
       if (BABYLON.Vector3.Dot(tangent, cameraForward) < 0) tangent.scaleInPlace(-1);
 
       const sideSign = BABYLON.Vector3.Dot(normal, right);
+      const flatVelocity = new BABYLON.Vector3(this.velX, 0, this.velZ);
+      const speed = flatVelocity.length();
+      const approachDir = speed > 0.5
+        ? flatVelocity.scale(1 / speed)
+        : cameraForward.clone();
+      const tangentAlignment = Math.abs(BABYLON.Vector3.Dot(approachDir, tangent));
+      const intoWall = -BABYLON.Vector3.Dot(approachDir, normal);
+      // Require an angled approach; running straight into a wall should not start a wall run.
+      if (tangentAlignment < 0.35 || intoWall > 0.6) return;
+
       candidates.push({
         normal,
         tangent,
@@ -632,8 +976,6 @@ export class FirstPersonController {
 
     if (candidates.length === 0) return null;
 
-    // Prefer the wall closest to the capsule. This still allows either side
-    // of a parallel-panel corridor to become the active wall.
     return candidates.reduce((closest, candidate) =>
       candidate.distance < closest.distance ? candidate : closest,
     );
@@ -666,8 +1008,15 @@ export class FirstPersonController {
       this.velZ = this.wallTangent.z * WALL_RUN.JUMP_TANGENT_IMPULSE
         + this.wallNormal.z * WALL_RUN.JUMP_NORMAL_IMPULSE;
       this.vy = WALL_RUN.JUMP_VERTICAL_IMPULSE;
+      this.jumpGraceTimer = MOVEMENT.JUMP_GROUND_GRACE;
       this.lastWallColliderHandle = this.wallColliderHandle;
       this.wallRunCooldown = WALL_RUN.COOLDOWN;
+      this.detachWallRun();
+      return;
+    }
+
+    const position = this.body.translation();
+    if (!this.hasWallContact(position)) {
       this.detachWallRun();
       return;
     }
@@ -682,6 +1031,27 @@ export class FirstPersonController {
     this.velZ = this.wallTangent.z * WALL_RUN.VELOCITY - this.wallNormal.z * WALL_RUN.INWARD_PULL;
   }
 
+  private hasWallContact(position: { x: number; y: number; z: number }): boolean {
+    // wallNormal points outward from the wall toward the player.
+    const towardWall = new BABYLON.Vector3(-this.wallNormal.x, 0, -this.wallNormal.z);
+    const ray = new RAPIER.Ray(
+      { x: position.x, y: position.y, z: position.z },
+      { x: towardWall.x, y: 0, z: towardWall.z },
+    );
+    const hit = this.world.castRayAndGetNormal(
+      ray,
+      WALL_RUN.RAY_DISTANCE + 0.15,
+      true,
+      undefined,
+      undefined,
+      this.collider,
+      this.body,
+    );
+    if (!hit) return false;
+    if (Math.abs(hit.normal.y) >= 0.25) return false;
+    return hit.collider.handle === this.wallColliderHandle;
+  }
+
   private detachWallRun() {
     this.wallRunning = false;
     this.wallRunTime = 0;
@@ -694,18 +1064,19 @@ export class FirstPersonController {
     const heightBlend = 1 - Math.exp(-MOVEMENT.CAMERA_HEIGHT_RESPONSE * dt);
     this.eyeOffset += (targetEyeOffset - this.eyeOffset) * heightBlend;
 
-    const speed = Math.hypot(this.velX, this.velZ);
+    const speed = this.speed3D;
     const fovProgress = Math.max(0, Math.min(
       1,
       (speed - MOVEMENT.FOV_SPEED_START) / (MOVEMENT.FOV_SPEED_MAX - MOVEMENT.FOV_SPEED_START),
     ));
-    const targetFov = MOVEMENT.BASE_FOV + MOVEMENT.MAX_FOV_WIDEN * fovProgress;
+    const boostZoom = this.sensoryBoostActive ? -0.05 : 0;
+    const targetFov = MOVEMENT.BASE_FOV + MOVEMENT.MAX_FOV_WIDEN * fovProgress + boostZoom;
     const fovBlend = 1 - Math.exp(-MOVEMENT.CAMERA_FOV_RESPONSE * dt);
     this.cameraFov += (targetFov - this.cameraFov) * fovBlend;
     this.camera.fov = this.cameraFov;
 
-    const lateralSpeed = speed > 0.001
-      ? BABYLON.Vector3.Dot(new BABYLON.Vector3(this.velX, 0, this.velZ), right) / speed
+    const lateralSpeed = this.horizontalSpeed > 0.001
+      ? BABYLON.Vector3.Dot(new BABYLON.Vector3(this.velX, 0, this.velZ), right) / this.horizontalSpeed
       : 0;
     const targetSlideRoll = this.sliding
       ? Math.max(-1, Math.min(1, lateralSpeed)) * MOVEMENT.CAMERA_SLIDE_ROLL
@@ -734,6 +1105,10 @@ export class FirstPersonController {
     return Math.hypot(this.velX, this.velZ);
   }
 
+  get speed3D(): number {
+    return Math.sqrt(this.velX * this.velX + this.vy * this.vy + this.velZ * this.velZ);
+  }
+
   get dashChargeAmount(): number {
     return this.dashCharge;
   }
@@ -744,5 +1119,38 @@ export class FirstPersonController {
 
   get isWallRunning(): boolean {
     return this.wallRunning;
+  }
+
+  get isDashing(): boolean {
+    return this.dashTimeRemaining > 0;
+  }
+
+  get isSensoryBoosting(): boolean {
+    return this.sensoryBoostActive;
+  }
+
+  /** 1 at boost start, draining to 0 over the boost window. */
+  get sensoryBoostRemaining(): number {
+    if (!this.sensoryBoostActive) return 0;
+    return Math.max(
+      0,
+      1 - this.sensoryBoostElapsed / this.sensoryBoostDuration,
+    );
+  }
+
+  get isSliding(): boolean {
+    return this.sliding;
+  }
+
+  get isMantling(): boolean {
+    return this.mantle.active;
+  }
+
+  get speedEffectIntensity(): number {
+    const speed = Math.max(this.horizontalSpeed, this.speed3D * 0.85);
+    const base = Math.max(0, Math.min(1, (speed - 10) / 22));
+    const dashBoost = this.isDashing ? 0.55 : 0;
+    const slideBoost = this.sliding ? Math.min(0.25, this.horizontalSpeed / 80) : 0;
+    return Math.max(0, Math.min(1, base + dashBoost + slideBoost));
   }
 }

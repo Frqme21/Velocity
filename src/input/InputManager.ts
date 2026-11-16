@@ -3,9 +3,15 @@ export interface InputState {
   backward: boolean;
   left: boolean;
   right: boolean;
+  /** True only on the frame A is pressed. */
+  leftPressed: boolean;
+  /** True only on the frame D is pressed. */
+  rightPressed: boolean;
   jump: boolean;
   /** True only on the frame Space is pressed. */
   jumpPressed: boolean;
+  /** True while a dash/sensory key is held. */
+  dashHeld: boolean;
   /** True only on the frame a dash key is pressed. */
   dashPressed: boolean;
   /** True while a slide key is held. */
@@ -26,6 +32,8 @@ export class InputManager {
   private jumpLatch = false;
   private dashLatch = false;
   private slideLatch = false;
+  private leftLatch = false;
+  private rightLatch = false;
   private locked = false;
   private canvas: HTMLCanvasElement;
 
@@ -48,6 +56,8 @@ export class InputManager {
       if (!this.locked) return;
       event.preventDefault();
       if (event.code === 'Space' && !event.repeat) this.jumpLatch = true;
+      if (event.code === 'KeyA' && !event.repeat) this.leftLatch = true;
+      if (event.code === 'KeyD' && !event.repeat) this.rightLatch = true;
       if ((event.code === 'ShiftLeft' || event.code === 'ShiftRight') && !event.repeat) {
         this.dashLatch = true;
       }
@@ -130,17 +140,23 @@ export class InputManager {
     this.jumpLatch = false;
     this.dashLatch = false;
     this.slideLatch = false;
+    this.leftLatch = false;
+    this.rightLatch = false;
     return state;
   }
 
   private buildState(): InputState {
+    const dashHeld = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
     return {
       forward: this.keys.has('KeyW'),
       backward: this.keys.has('KeyS'),
       left: this.keys.has('KeyA'),
       right: this.keys.has('KeyD'),
+      leftPressed: this.leftLatch,
+      rightPressed: this.rightLatch,
       jump: this.keys.has('Space'),
       jumpPressed: this.jumpLatch,
+      dashHeld,
       dashPressed: this.dashLatch,
       slide: this.keys.has('ControlLeft') || this.keys.has('ControlRight'),
       slidePressed: this.slideLatch,

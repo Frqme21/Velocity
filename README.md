@@ -7,11 +7,14 @@ A minimal Babylon.js + Rapier3D first-person movement sandbox.
 - `W` / `A` / `S` / `D` — move
 - Mouse — look (click the canvas to capture the pointer)
 - `Space` — jump
-- `Shift` — ground dash or air dash when the white meter is full
+- `Shift` (ground) — dash toward your look direction when the white meter is full
+- `Shift` (air) — hold to enter sensory boost: slow motion and a teal overlay while the meter drains over 3s
+- `A` / `D` (during sensory boost) — short sideways evasive dash
+- Release `Shift` or let the meter empty (during sensory boost) — short forward dash
 - `Ctrl` — hold to slide; holding it while landing automatically starts a slide
 - `Esc` — release the pointer
 
-Movement uses one constant run speed with momentum-preserving ground and air control. Airborne momentum can be steered without being discarded, and slides support camera-relative carving, throttle, braking, slope acceleration, and slide-hopping. Sliding also includes a forward impulse, a short low-friction window, and speed-based camera FOV. The dash meter below the circular crosshair refills in 0.7 seconds. The mouse camera applies raw pointer-lock deltas directly without camera inertia or interpolation.
+Movement uses a `10 m/s` base run speed with `0.3s` coyote time, momentum-preserving ground/air control, and raw pointer-lock camera input. `Shift` launches a `24 m/s` ground dash for `0.2s` in the current look direction and recharges quickly. In the air, `Shift` instead slows time to `20%` for up to `3s`; the dash meter becomes a right-to-left boost timer, `A`/`D` fire short side dashes, and ending the boost fires a forward dash. Sliding bursts to `17 m/s`, can carve/throttle/brake, keeps momentum into slide-hops, and downhill slopes remove most friction while adding speed. The controller can mantle nearby ledges and shows wind/speed indicators during fast movement. The HUD includes a circular crosshair, a dash meter below it, and speed/FPS readout.
 
 ## Development
 

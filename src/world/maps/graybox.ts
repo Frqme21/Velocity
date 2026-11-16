@@ -93,54 +93,77 @@ export function createGraybox(
 
   // The floor is split into a 6.2m-wide trench. The two wall-run panels sit
   // directly over this trench, leaving an unobstructed route underneath them.
-  addBox('main-floor-west', new BABYLON.Vector3(-8.125, -0.25, 0), new BABYLON.Vector3(31.75, 0.5, 48), {
+  addBox('main-floor-west', new BABYLON.Vector3(-16.125, -0.25, 0), new BABYLON.Vector3(47.75, 0.5, 80), {
     color: 'floor',
   });
-  addBox('main-floor-east', new BABYLON.Vector3(18.975, -0.25, 0), new BABYLON.Vector3(10.05, 0.5, 48), {
+  addBox('main-floor-east', new BABYLON.Vector3(26.975, -0.25, 0), new BABYLON.Vector3(26.05, 0.5, 80), {
     color: 'floor',
   });
-  addBox('main-floor-gap-south', new BABYLON.Vector3(10.85, -0.25, -8), new BABYLON.Vector3(6.2, 0.5, 32), {
+  addBox('main-floor-gap-south', new BABYLON.Vector3(10.85, -0.25, -16), new BABYLON.Vector3(6.2, 0.5, 48), {
     color: 'floor',
   });
-  addBox('main-floor-gap-north', new BABYLON.Vector3(10.85, -0.25, 23), new BABYLON.Vector3(6.2, 0.5, 2), {
+  addBox('main-floor-gap-north', new BABYLON.Vector3(10.85, -0.25, 31), new BABYLON.Vector3(6.2, 0.5, 18), {
     color: 'floor',
   });
 
-  addBox('wall-north', new BABYLON.Vector3(0, 2, 24), new BABYLON.Vector3(48, 4, 0.5));
-  addBox('wall-south', new BABYLON.Vector3(0, 2, -24), new BABYLON.Vector3(48, 4, 0.5));
-  addBox('wall-east', new BABYLON.Vector3(24, 2, 0), new BABYLON.Vector3(0.5, 4, 48));
-  addBox('wall-west', new BABYLON.Vector3(-24, 2, 0), new BABYLON.Vector3(0.5, 4, 48));
+  addBox('wall-north', new BABYLON.Vector3(0, 3, 40), new BABYLON.Vector3(80, 6, 0.5));
+  addBox('wall-south', new BABYLON.Vector3(0, 3, -40), new BABYLON.Vector3(80, 6, 0.5));
+  addBox('wall-east', new BABYLON.Vector3(40, 3, 0), new BABYLON.Vector3(0.5, 6, 80));
+  addBox('wall-west', new BABYLON.Vector3(-40, 3, 0), new BABYLON.Vector3(0.5, 6, 80));
 
   // Low and high platforms.
-  addBox('platform-low', new BABYLON.Vector3(-9, 1, 7), new BABYLON.Vector3(7, 2, 6));
-  addBox('platform-high', new BABYLON.Vector3(10, 2.5, -9), new BABYLON.Vector3(8, 5, 7));
+  addBox('platform-low', new BABYLON.Vector3(-14, 1, 8), new BABYLON.Vector3(9, 2, 7));
+  addBox('platform-high', new BABYLON.Vector3(14, 2.5, -14), new BABYLON.Vector3(10, 5, 8));
 
   // Stairs to the low platform.
   for (let step = 0; step < 6; step++) {
     const height = (step + 1) * 0.25;
     addBox(
       `stairs-${step}`,
-      new BABYLON.Vector3(-5.25 + step * 0.75, height / 2, 10.4),
-      new BABYLON.Vector3(0.75, height, 2.2),
+      new BABYLON.Vector3(-9.875 - step * 0.75, height / 2, 8),
+      new BABYLON.Vector3(0.75, height, 2.4),
     );
   }
 
   // Ramp to the high platform.
-  addRamp('ramp-high', new BABYLON.Vector3(10, 2.5, -2.7), 5, 9, 5);
+  addRamp('ramp-high', new BABYLON.Vector3(14, 2.5, -6.2), 6, 10, 5);
 
   // Pillars and cover for general collision and movement testing.
-  addBox('pillar-1', new BABYLON.Vector3(-1, 2.5, 1), new BABYLON.Vector3(1.2, 5, 1.2), {
+  addBox('pillar-1', new BABYLON.Vector3(-4, 2.5, -2), new BABYLON.Vector3(1.2, 5, 1.2), {
     color: 'obstacle',
   });
-  addBox('pillar-2', new BABYLON.Vector3(4, 3, -3), new BABYLON.Vector3(1.2, 6, 1.2), {
+  addBox('pillar-2', new BABYLON.Vector3(2, 3, -8), new BABYLON.Vector3(1.2, 6, 1.2), {
     color: 'obstacle',
   });
-  addBox('cover-1', new BABYLON.Vector3(-4, 0.65, -7), new BABYLON.Vector3(4, 1.3, 0.8), {
+  addBox('cover-1', new BABYLON.Vector3(-8, 0.65, -20), new BABYLON.Vector3(5, 1.3, 0.8), {
     color: 'accent',
   });
-  addBox('cover-2', new BABYLON.Vector3(17, 0.9, 3), new BABYLON.Vector3(3, 1.8, 3), {
+  addBox('cover-2', new BABYLON.Vector3(24, 0.9, 4), new BABYLON.Vector3(4, 1.8, 3), {
     color: 'obstacle',
   });
+  addBox('cover-3', new BABYLON.Vector3(-20, 0.9, -28), new BABYLON.Vector3(4, 1.8, 3), {
+    color: 'obstacle',
+  });
+
+  // Mantle test ledges at varying heights.
+  addBox('mantle-low', new BABYLON.Vector3(-28, 0.5, -18), new BABYLON.Vector3(4, 1, 3), {
+    color: 'accent',
+  });
+  addBox('mantle-mid', new BABYLON.Vector3(-28, 0.7, -14), new BABYLON.Vector3(4, 1.4, 3), {
+    color: 'accent',
+  });
+  addBox('mantle-high', new BABYLON.Vector3(-28, 0.9, -10), new BABYLON.Vector3(4, 1.8, 3), {
+    color: 'obstacle',
+  });
+
+  // Downhill slide ramp for slope-acceleration testing.
+  addRamp('slide-slope', new BABYLON.Vector3(-22, 2.4, 14), 5, 14, 4.8, {
+    color: 'accent',
+  });
+  addBox('slide-slope-platform', new BABYLON.Vector3(-15.5, 4.8, 14), new BABYLON.Vector3(2.5, 0.25, 5), {
+    color: 'accent',
+  });
+  addBox('slide-slope-runout', new BABYLON.Vector3(-30, 0.125, 14), new BABYLON.Vector3(4, 0.25, 5));
 
   // Exactly two parallel vertical panels form the wall-run test bay. Their
   // inner faces are 5.2m apart, so a wall jump can chain from one to the

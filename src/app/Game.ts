@@ -4,6 +4,7 @@ import { InputManager } from '../input/InputManager';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { FirstPersonController } from '../world/FirstPersonController';
 import { createGraybox } from '../world/maps/graybox';
+import { KatanaViewmodel } from '../world/KatanaViewmodel';
 import { HUD } from '../ui/HUD';
 
 export class Game {
@@ -13,6 +14,7 @@ export class Game {
   private camera!: BABYLON.FreeCamera;
   private input!: InputManager;
   private controller!: FirstPersonController;
+  private katana!: KatanaViewmodel;
   private hud!: HUD;
   private physics!: PhysicsWorld;
   private rapierWorld!: RAPIER.World;
@@ -23,6 +25,7 @@ export class Game {
 
   async init() {
     this.engine = new BABYLON.Engine(this.canvas, true, { stencil: true });
+    this.engine.maxFPS = 240;
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio, 2));
 
     this.physics = new PhysicsWorld();
@@ -80,6 +83,19 @@ export class Game {
 
     this.hud = new HUD(document.getElementById('hud')!);
 
+    this.katana = new KatanaViewmodel(this.scene, this.camera);
+    try {
+      await this.katana.load();
+    } catch (error) {
+      console.warn('Katana viewmodel failed to load', error);
+    }
+    (window as unknown as Record<string, unknown>).__velocity = {
+      BABYLON,
+      scene: this.scene,
+      camera: this.camera,
+      katana: this.katana,
+    };
+
     this.engine.runRenderLoop(() => {
       const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
       this.controller.update(dt);
@@ -89,11 +105,26 @@ export class Game {
       // rendering, so camera.rotation can never lag behind by one frame.
       const playerPosition = this.controller.position;
       this.controller.syncCamera(playerPosition.x, playerPosition.y, playerPosition.z);
-      this.hud.update(
-        this.controller.horizontalSpeed,
-        this.engine.getFps(),
-        this.controller.dashChargeAmount,
-      );
+      this.katana.update(dt, {
+        speed: this.controller.horizontalSpeed,
+        grounded: this.controller.isGrounded,
+        dashing: this.controller.isDashing,
+        sliding: this.controller.isSliding,
+        wallRunning: this.controller.isWallRunning,
+        sensoryBoosting: this.controller.isSensoryBoosting,
+      });
+      this.hud.update({
+        speed: this.controller.horizontalSpeed,
+        fps: this.engine.getFps(),
+        dashCharge: this.controller.dashChargeAmount,
+        meter: this.controller.isSensoryBoosting
+          ? this.controller.sensoryBoostRemaining
+          : this.controller.dashChargeAmount,
+        speedEffect: this.controller.speedEffectIntensity,
+        dashing: this.controller.isDashing,
+        sliding: this.controller.isSliding,
+        sensoryBoost: this.controller.isSensoryBoosting,
+      });
       this.scene.render();
     });
 
