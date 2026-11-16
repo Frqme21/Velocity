@@ -168,21 +168,19 @@ export class FirstPersonController {
       this.vy = corrected.y / dt;
     }
 
-    // Collision correction determines the actual velocity. While wall-running,
-    // keep the commanded tangent/inward velocity so the controller does not
-    // erase the wall-run state when the inward pull grazes the surface.
-    if (dt > 0 && !this.wallRunning) {
-      this.velX = corrected.x / dt;
-      this.velZ = corrected.z / dt;
-    }
-
+    // Keep the movement velocity independent from Rapier's collision
+    // correction. The corrected translation controls the player's position,
+    // but copying it back into velocity can erase momentum when the capsule
+    // merely brushes a surface (especially the wall-run panels).
     this.body.setNextKinematicTranslation({
       x: position.x + corrected.x,
       y: position.y + corrected.y,
       z: position.z + corrected.z,
     });
 
-    const rollTarget = this.wallRunning ? this.wallSideSign * WALL_RUN.ROLL : 0;
+    // The camera should lean away from the attached wall rather than toward
+    // it. wallSideSign is positive for a wall on the player's right.
+    const rollTarget = this.wallRunning ? -this.wallSideSign * WALL_RUN.ROLL : 0;
     const rollBlend = 1 - Math.exp(-WALL_RUN.ROLL_RESPONSE * dt);
     this.cameraRoll += (rollTarget - this.cameraRoll) * rollBlend;
 
@@ -190,15 +188,21 @@ export class FirstPersonController {
   }
 
   private applyGroundMovement(wishX: number, wishZ: number, jumpPressed: boolean, dt: number) {
+    const hasMovementInput = wishX !== 0 || wishZ !== 0;
     const speed = Math.hypot(this.velX, this.velZ);
-    if (speed > 0.001) {
+
+    // Ground friction is applied when the player releases movement input, or
+    // when momentum is above the target running speed. While steering, the
+    // existing velocity is retained so a stray collision cannot make running
+    // feel as though the player suddenly stops dead.
+    if ((!hasMovementInput || speed > MOVEMENT.RUN_SPEED) && speed > 0.001) {
       const drop = Math.max(speed, MOVEMENT.STOP_SPEED) * MOVEMENT.FRICTION * dt;
       const scale = Math.max(0, speed - drop) / speed;
       this.velX *= scale;
       this.velZ *= scale;
     }
 
-    if (wishX !== 0 || wishZ !== 0) {
+    if (hasMovementInput) {
       const currentSpeed = this.velX * wishX + this.velZ * wishZ;
       const remaining = MOVEMENT.RUN_SPEED - currentSpeed;
       if (remaining > 0) {
