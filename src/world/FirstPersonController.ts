@@ -2,6 +2,7 @@ import * as BABYLON from '@babylonjs/core';
 import * as RAPIER from '@dimforge/rapier3d-compat';
 import { InputManager } from '../input/InputManager';
 import { MOVEMENT_CONFIG } from '../config/movement';
+import { GRAPPLE_CONFIG } from '../config/grapple';
 
 const MOVEMENT = {
   RUN_SPEED: MOVEMENT_CONFIG.RUN_SPEED,
@@ -56,16 +57,6 @@ const MOVEMENT = {
   MANTLE_MAX_LEDGE_HEIGHT: MOVEMENT_CONFIG.MANTLE_MAX_LEDGE_HEIGHT,
   MANTLE_DURATION: MOVEMENT_CONFIG.MANTLE_DURATION,
   MANTLE_FORWARD_PUSH: MOVEMENT_CONFIG.MANTLE_FORWARD_PUSH,
-  GRAPPLE_ZIP_SPEED: MOVEMENT_CONFIG.GRAPPLE_ZIP_SPEED,
-  GRAPPLE_ZIP_ARRIVE_DISTANCE: MOVEMENT_CONFIG.GRAPPLE_ZIP_ARRIVE_DISTANCE,
-  GRAPPLE_ZIP_HEIGHT: MOVEMENT_CONFIG.GRAPPLE_ZIP_HEIGHT,
-  GRAPPLE_ZIP_BRAKE_SPEED: MOVEMENT_CONFIG.GRAPPLE_ZIP_BRAKE_SPEED,
-  GRAPPLE_ZIP_BRAKE_VY: MOVEMENT_CONFIG.GRAPPLE_ZIP_BRAKE_VY,
-  GRAPPLE_ZIP_LAUNCH_SPEED: MOVEMENT_CONFIG.GRAPPLE_ZIP_LAUNCH_SPEED,
-  GRAPPLE_ZIP_END_SPEED: MOVEMENT_CONFIG.GRAPPLE_ZIP_END_SPEED,
-  GRAPPLE_ZIP_ARC: MOVEMENT_CONFIG.GRAPPLE_ZIP_ARC,
-  GRAPPLE_ZIP_FOV: MOVEMENT_CONFIG.GRAPPLE_ZIP_FOV,
-  GRAPPLE_ZIP_ROLL: MOVEMENT_CONFIG.GRAPPLE_ZIP_ROLL,
   CAMERA_HEIGHT_RESPONSE: MOVEMENT_CONFIG.CAMERA_HEIGHT_RESPONSE,
   CAMERA_FOV_RESPONSE: MOVEMENT_CONFIG.CAMERA_FOV_RESPONSE,
   CAMERA_SLIDE_ROLL: MOVEMENT_CONFIG.CAMERA_SLIDE_ROLL,
@@ -111,6 +102,9 @@ interface MantleState {
   start: BABYLON.Vector3;
   end: BABYLON.Vector3;
 }
+
+/** Why a grapple pull ended. */
+export type GrappleEndReason = 'vaulted' | 'cancelled';
 
 export class FirstPersonController {
   private camera: BABYLON.FreeCamera;
@@ -171,25 +165,39 @@ export class FirstPersonController {
   };
 
   /**
-   * Active one-tap zip. While set, the player is pulled straight towards the
-   * arrival position with gravity disabled.
+   * Active grapple pull. While set, the player is pulled along a straight
+   * line towards the anchor with gravity disabled - no pendulum, no spring.
    */
-  private zipTarget: BABYLON.Vector3 | null = null;
-  /** Straight line distance to the arrival point when the zip started. */
-  private zipDistance = 0;
-  /** Time since the zip started, used for the speed shaping. */
-  private zipElapsed = 0;
-  /** Decaying launch shake, 1 at the start of the zip. */
-  private zipShake = 0;
-  /** Camera lean into the zip direction. */
-  private zipRoll = 0;
+  private grappleTarget: BABYLON.Vector3 | null = null;
+  /** Platform the vault should carry the player onto, when there is one. */
+  private grappleLanding: BABYLON.Vector3 | null = null;
+  /** Current speed of the pull, in m/s. */
+  private grapplePullSpeed = 0;
+  /** Horizontal speed the player had when the hook fired, in m/s. */
+  private grappleEntrySpeed = 0;
+  /** Straight line distance to the anchor when the pull started. */
+  private grappleDistance = 0;
+  /** Time since the pull started, used for the speed shaping. */
+  private grappleElapsed = 0;
+  /** 0..1 intensity of the FOV kick, decays after the pull ends. */
+  private grappleFov = 0;
+  /** Temporary multiplier on the pull speed from dashing mid-pull. */
+  private grappleSpeedBoost = 1;
+  /** Temporary upward kick added to the pull from jumping mid-pull. */
+  private grappleLift = 0;
+  /** Cooldown between two jump kicks during a pull. */
+  private grappleKickCooldown = 0;
+  /** Decaying launch shake, 1 at the start of the pull. */
+  private grappleShake = 0;
+  /** Camera lean into the pull direction. */
+  private grappleRoll = 0;
 
   /**
-   * Called when a zip ends.
-   * `arrived` means the player reached the target, `cancelled` means the zip
-   * was interrupted (jump or dash).
+   * Called when the grapple pull ends.
+   * - `vaulted`: the player reached the anchor and popped over the ledge.
+   * - `cancelled`: the pull was interrupted (blocked geometry).
    */
-  public onZipFinished?: (reason: 'arrived' | 'cancelled') => void;
+  public onGrappleFinished?: (reason: GrappleEndReason) => void;
 
   public sensitivity = MOVEMENT.SENSITIVITY;
 
@@ -224,22 +232,36 @@ export class FirstPersonController {
   }
 
   /**
-   * Start a one-tap zip towards `arrivalPos`.
+   * Attach the hook and start the high speed linear pull towards `anchorPos`.
    *
-   * The player is moved straight along the line to the target at a fixed
-   * speed with gravity disabled, and the zip ends automatically on arrival.
+   * The pull is not a rope and not a pendulum: the player is accelerated
+   * straight onto the line to the anchor. The incoming momentum is kept and
+   * boosted, and any downward velocity is cancelled immediately so the hook
+   * always feels like it catches the player.
+   *
+   * `landingPos` is the platform the vault should carry the player onto.
    */
-  startZip(arrivalPos: BABYLON.Vector3) {
-    if (this.zipTarget) this.cancelZip(false);
+  startGrapplePull(anchorPos: BABYLON.Vector3, landingPos?: BABYLON.Vector3) {
+    if (this.grappleTarget) this.endGrapplePull('cancelled', false);
 
-    this.zipTarget = arrivalPos.clone();
-    this.zipElapsed = 0;
-    this.zipShake = 1;
-    this.zipRoll = 0;
-    this.zipDistance = BABYLON.Vector3.Distance(this.position, this.zipTarget);
-    this.velX = 0;
-    this.velZ = 0;
-    this.vy = 0;
+    this.grappleTarget = anchorPos.clone();
+    this.grappleLanding = landingPos?.clone() ?? null;
+    this.grappleElapsed = 0;
+    this.grappleShake = 1;
+    this.grappleRoll = 0;
+    this.grappleFov = 1;
+    this.grapplePullSpeed = 0;
+    this.grappleSpeedBoost = 1;
+    this.grappleLift = 0;
+    this.grappleKickCooldown = 0;
+    this.grappleDistance = BABYLON.Vector3.Distance(this.position, this.grappleTarget);
+
+    // Momentum preservation: remember the horizontal speed we came in with.
+    this.grappleEntrySpeed = Math.hypot(this.velX, this.velZ);
+
+    // Cancel the downward velocity right away - the hook takes over the arc.
+    if (GRAPPLE_CONFIG.CANCEL_FALL_SPEED && this.vy < 0) this.vy = 0;
+
     this.grounded = false;
     this.coyoteTimer = 0;
     this.jumpGraceTimer = 0;
@@ -248,104 +270,192 @@ export class FirstPersonController {
     if (this.sensoryBoostActive) this.cancelSensoryBoost();
   }
 
-  /** True while a zip is in progress. */
-  get isZipping(): boolean {
-    return this.zipTarget !== null;
+  /** True while the player is being pulled towards an anchor. */
+  get isGrappling(): boolean {
+    return this.grappleTarget !== null;
   }
 
-  /** Interrupt the zip. `notify` controls whether the callback fires. */
-  private cancelZip(notify: boolean) {
-    if (!this.zipTarget) return;
-    this.zipTarget = null;
-    this.zipRoll = 0;
-    if (notify) this.onZipFinished?.('cancelled');
+  /** End the pull. `notify` controls whether the callback fires. */
+  private endGrapplePull(reason: GrappleEndReason, notify: boolean) {
+    if (!this.grappleTarget) return;
+    this.grappleTarget = null;
+    this.grappleRoll = 0;
+    if (notify) this.onGrappleFinished?.(reason);
   }
 
   /**
-   * Zip movement: the body is driven directly along the line to the arrival
-   * point. No gravity, no pendulum, but the speed is shaped so the zip
-   * kicks off hard, cruises and then boosts into the ring.
+   * The pull itself.
+   *
+   * The velocity is blended onto the straight line towards the anchor, so
+   * the first frames keep the player's own momentum (the yank reads as a
+   * curve into the line) and everything after that is a direct, high speed
+   * ride. Gravity is fully disabled while the hook is attached.
    */
-  private applyZipMovement(dt: number, position: { x: number; y: number; z: number }) {
-    const target = this.zipTarget;
+  private applyGrapplePull(dt: number, position: { x: number; y: number; z: number }) {
+    const target = this.grappleTarget;
     if (!target) return;
 
-    this.zipElapsed += dt;
+    this.grappleElapsed += dt;
 
     const current = new BABYLON.Vector3(position.x, position.y, position.z);
     const delta = target.subtract(current);
     const distance = delta.length();
 
-    if (distance <= MOVEMENT.GRAPPLE_ZIP_ARRIVE_DISTANCE) {
-      this.finishZip();
+    // Ledge vault: close enough to the anchor, release and pop over it.
+    if (distance <= GRAPPLE_CONFIG.DETACH_DISTANCE) {
+      this.vaultOverLedge(delta);
       return;
     }
 
-    // 0 at the start of the zip, 1 at the arrival point.
+    const direction = delta.scale(1 / distance);
     const progress = BABYLON.Scalar.Clamp(
-      1 - distance / Math.max(this.zipDistance, 0.001),
+      1 - distance / Math.max(this.grappleDistance, 0.001),
       0,
       1,
     );
 
-    const direction = delta.scale(1 / distance);
-    // A slight upward bow makes the zip read as a pulled line instead of a
-    // flat rail, without turning it into a pendulum swing.
-    direction.y += Math.sin(Math.PI * progress) * MOVEMENT.GRAPPLE_ZIP_ARC;
-    direction.normalize();
+    // Pull speed: ramps up fast, gains a little over the ride and never
+    // drops below the momentum the player brought to the hook.
+    const cruiseSpeed = Math.min(
+      GRAPPLE_CONFIG.PULL_MAX_SPEED,
+      Math.max(
+        GRAPPLE_CONFIG.PULL_SPEED + GRAPPLE_CONFIG.PULL_SPEED_GAIN * progress,
+        this.grappleEntrySpeed * GRAPPLE_CONFIG.MOMENTUM_BOOST,
+      ),
+    );
 
-    const speed = this.getZipSpeed(progress);
-    this.velX = direction.x * speed;
-    this.velZ = direction.z * speed;
-    this.vy = direction.y * speed;
+    // Ease off over the last metres so the landing is a smooth arrival
+    // instead of a hard stop against the anchor.
+    const approach = BABYLON.Scalar.Clamp(
+      (distance - GRAPPLE_CONFIG.DETACH_DISTANCE) / GRAPPLE_CONFIG.APPROACH_ZONE,
+      0,
+      1,
+    );
+    const targetSpeed = cruiseSpeed
+      * BABYLON.Scalar.Lerp(GRAPPLE_CONFIG.APPROACH_SPEED_RATIO, 1, approach);
+
+    this.grapplePullSpeed +=
+      (targetSpeed - this.grapplePullSpeed)
+      * (1 - Math.exp(-GRAPPLE_CONFIG.PULL_RESPONSE * dt));
+
+    // A dash during the pull makes it faster, a jump kicks it upwards. Both
+    // are temporary and both keep the player on the pull line.
+    const boostedSpeed = this.grapplePullSpeed * this.grappleSpeedBoost;
+    const desiredX = direction.x * boostedSpeed;
+    const desiredY = direction.y * boostedSpeed + this.grappleLift;
+    const desiredZ = direction.z * boostedSpeed;
+
+    // Snap onto the pull line. The response is high, so the ride reads as a
+    // straight pull, but the blend keeps the first frames smooth.
+    const blend = 1 - Math.exp(-GRAPPLE_CONFIG.PULL_BLEND * dt);
+    this.velX += (desiredX - this.velX) * blend;
+    this.vy += (desiredY - this.vy) * blend;
+    this.velZ += (desiredZ - this.velZ) * blend;
   }
 
   /**
-   * The speed profile of the zip: a hard launch, a fast cruise and a final
-   * boost into the ring. A constant speed feels like floating.
+   * The ledge vault.
+   *
+   * The hook releases close to the anchor and an upward plus forward impulse
+   * carries the player up and over the ledge they grabbed. The player is
+   * never teleported onto the anchor - that used to shove the capsule into
+   * the geometry and push the player straight back down.
+   *
+   * When the anchor knows its platform the vault solves a ballistic arc onto
+   * it, so the landing is reliable no matter which side the player hooked
+   * from. Without a platform the vault simply keeps the travel direction.
    */
-  private getZipSpeed(progress: number): number {
-    const keys: Array<[number, number]> = [
-      [0, MOVEMENT.GRAPPLE_ZIP_LAUNCH_SPEED],
-      [0.16, MOVEMENT.GRAPPLE_ZIP_SPEED],
-      [0.5, MOVEMENT.GRAPPLE_ZIP_SPEED * 0.86],
-      [0.78, MOVEMENT.GRAPPLE_ZIP_SPEED * 1.1],
-      [1, MOVEMENT.GRAPPLE_ZIP_END_SPEED],
-    ];
+  private vaultOverLedge(toAnchor: BABYLON.Vector3) {
+    const upSpeed = GRAPPLE_CONFIG.VAULT_UP_SPEED;
 
-    for (let i = 0; i < keys.length - 1; i++) {
-      const [fromP, fromSpeed] = keys[i];
-      const [toP, toSpeed] = keys[i + 1];
-      if (progress <= toP) {
-        const t = (progress - fromP) / Math.max(toP - fromP, 0.0001);
-        return BABYLON.Scalar.Lerp(fromSpeed, toSpeed, BABYLON.Scalar.Clamp(t, 0, 1));
+    // Direction and speed of the pop.
+    let direction: BABYLON.Vector3;
+    let forwardSpeed: number;
+
+    const landing = this.grappleLanding;
+    if (landing) {
+      // The landing point is the platform surface; the body centre rests half
+      // a player height above it.
+      const landingTarget = landing.add(new BABYLON.Vector3(
+        0,
+        MOVEMENT.PLAYER_HEIGHT / 2,
+        0,
+      ));
+      const toLanding = landingTarget.subtract(this.position);
+      const horizontal = new BABYLON.Vector3(toLanding.x, 0, toLanding.z);
+      const horizontalDistance = horizontal.length();
+
+      if (horizontalDistance > 0.001) {
+        direction = horizontal.scale(1 / horizontalDistance);
+        forwardSpeed = this.getVaultForwardSpeed(
+          horizontalDistance,
+          toLanding.y,
+          upSpeed,
+        );
+      } else {
+        direction = new BABYLON.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+        forwardSpeed = GRAPPLE_CONFIG.VAULT_FORWARD_SPEED;
       }
+    } else {
+      // No platform: keep travelling towards the anchor, flattened to the
+      // horizontal plane. The pop is what lifts the player over the ledge.
+      const horizontal = new BABYLON.Vector3(toAnchor.x, 0, toAnchor.z);
+      const horizontalLength = horizontal.length();
+      direction = horizontalLength > 0.001
+        ? horizontal.scale(1 / horizontalLength)
+        : new BABYLON.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+      forwardSpeed = Math.max(
+        GRAPPLE_CONFIG.VAULT_FORWARD_SPEED,
+        this.grapplePullSpeed * GRAPPLE_CONFIG.VAULT_KEEP_SPEED,
+      );
     }
 
-    return MOVEMENT.GRAPPLE_ZIP_END_SPEED;
-  }
+    this.velX = direction.x * forwardSpeed;
+    this.velZ = direction.z * forwardSpeed;
+    this.vy = upSpeed;
 
-  /** Damp the current velocity down to a gentle forward settle. */
-  private brakeZip() {
-    const horizontalSpeed = Math.hypot(this.velX, this.velZ);
-    if (horizontalSpeed > MOVEMENT.GRAPPLE_ZIP_BRAKE_SPEED) {
-      const scale = MOVEMENT.GRAPPLE_ZIP_BRAKE_SPEED / horizontalSpeed;
-      this.velX *= scale;
-      this.velZ *= scale;
-    }
-    this.vy = MOVEMENT.GRAPPLE_ZIP_BRAKE_VY;
+    // Keep the ground check from eating the pop on the very next frame.
+    this.grounded = false;
+    this.coyoteTimer = 0;
+    this.jumpGraceTimer = MOVEMENT.JUMP_GROUND_GRACE;
+
+    this.endGrapplePull('vaulted', true);
   }
 
   /**
-   * The player reached the target: detach the grapple and damp the velocity
-   * down to a clean landing.
+   * Solve the horizontal speed that puts the player on the landing platform.
+   *
+   * The arc is split into the rise (normal gravity) and the fall (the game
+   * pulls harder while falling), so the landing point is hit accurately.
    */
-  private finishZip() {
-    if (!this.zipTarget) return;
-    this.zipTarget = null;
-    this.zipRoll = 0;
-    this.brakeZip();
-    this.onZipFinished?.('arrived');
+  private getVaultForwardSpeed(
+    horizontalDistance: number,
+    verticalDistance: number,
+    upSpeed: number,
+  ): number {
+    const riseGravity = MOVEMENT.GRAVITY;
+    const fallGravity = MOVEMENT.GRAVITY * MOVEMENT.FALL_GRAVITY_MULTIPLIER;
+
+    // Time spent rising to the apex of the pop.
+    const riseTime = upSpeed / riseGravity;
+    const apexHeight = (upSpeed * upSpeed) / (2 * riseGravity);
+
+    // Time spent falling from the apex down to the platform.
+    const fallHeight = apexHeight - verticalDistance;
+    const fallTime = fallHeight > 0
+      ? Math.sqrt((2 * fallHeight) / fallGravity)
+      : 0;
+
+    const flightTime = riseTime + fallTime;
+    if (flightTime <= 0.001) return GRAPPLE_CONFIG.VAULT_FORWARD_SPEED;
+
+    return Math.max(
+      GRAPPLE_CONFIG.VAULT_FORWARD_MIN,
+      Math.min(
+        GRAPPLE_CONFIG.VAULT_FORWARD_MAX,
+        horizontalDistance / flightTime,
+      ),
+    );
   }
 
   private applyLookDelta(dx: number, dy: number) {
@@ -360,7 +470,7 @@ export class FirstPersonController {
     const input = this.input.read();
 
     // Air Shift starts a slow-motion sensory boost instead of an air dash.
-    // A live zip takes priority: Shift cancels the zip and dashes instead.
+    // A live pull takes priority: Shift cancels the pull and dashes instead.
     if (
       !this.sensoryBoostActive
       && input.dashPressed
@@ -368,7 +478,7 @@ export class FirstPersonController {
       && !this.grounded
       && !this.mantle.active
       && !this.sliding
-      && !this.zipTarget
+      && !this.grappleTarget
     ) {
       this.startSensoryBoost();
     }
@@ -379,7 +489,20 @@ export class FirstPersonController {
     this.dashTimeRemaining = Math.max(0, this.dashTimeRemaining - scaledDt);
     this.jumpGraceTimer = Math.max(0, this.jumpGraceTimer - scaledDt);
     this.sensoryBoostSideCooldown = Math.max(0, this.sensoryBoostSideCooldown - dt);
-    this.zipShake = Math.max(0, this.zipShake - dt / 0.35);
+    this.grappleShake = Math.max(0, this.grappleShake - dt / GRAPPLE_CONFIG.SHAKE_DECAY);
+    // The dash boost and the jump kick fade out while the pull continues.
+    if (this.grappleTarget) {
+      this.grappleSpeedBoost = 1
+        + (this.grappleSpeedBoost - 1) * Math.exp(-dt / GRAPPLE_CONFIG.DASH_BOOST_DECAY);
+      this.grappleLift = Math.max(
+        0,
+        this.grappleLift - (GRAPPLE_CONFIG.JUMP_KICK / GRAPPLE_CONFIG.JUMP_KICK_DECAY) * dt,
+      );
+    }
+    // The FOV kick fades out smoothly once the pull is over.
+    if (!this.grappleTarget) {
+      this.grappleFov = Math.max(0, this.grappleFov - dt / GRAPPLE_CONFIG.FOV_DECAY);
+    }
     if (!this.sensoryBoostActive) {
       this.dashCharge = Math.min(
         1,
@@ -405,16 +528,19 @@ export class FirstPersonController {
     ).normalize();
     const right = new BABYLON.Vector3(cosYaw, 0, -sinYaw);
 
-    // Jump or dash immediately cancel a running zip.
-    if (this.zipTarget) {
+    // While the hook is pulling, jump and dash never cancel it. The pull is
+    // a committed ride: the inputs add to it instead of breaking it, so a
+    // stray space or shift never throws the player off the line.
+    if (this.grappleTarget) {
+      this.grappleKickCooldown = Math.max(0, this.grappleKickCooldown - scaledDt);
       if (input.dashPressed && this.dashCharge >= 1) {
-        this.cancelZip(true);
-        this.startDash(lookDirection);
-      } else if (input.jumpPressed) {
-        this.cancelZip(true);
-        this.vy = MOVEMENT.JUMP_VELOCITY;
-        this.grounded = false;
-        this.jumpGraceTimer = MOVEMENT.JUMP_GROUND_GRACE;
+        // The dash becomes a speed boost along the pull line.
+        this.dashCharge = 0;
+        this.grappleSpeedBoost = GRAPPLE_CONFIG.DASH_BOOST;
+      } else if (input.jumpPressed && this.grappleKickCooldown <= 0) {
+        // The jump becomes an upward kick on the pull line.
+        this.grappleKickCooldown = GRAPPLE_CONFIG.JUMP_KICK_COOLDOWN;
+        this.grappleLift = GRAPPLE_CONFIG.JUMP_KICK;
       }
     }
 
@@ -446,10 +572,10 @@ export class FirstPersonController {
       this.updateSensoryBoost(dt, input, right, wishX, wishZ);
     } else if (this.mantle.active) {
       this.updateMantle(scaledDt, position);
-    } else if (this.zipTarget) {
-      // The zip owns the movement completely: no gravity, no ground friction,
-      // no air steering. The body is driven straight at the arrival point.
-      this.applyZipMovement(scaledDt, position);
+    } else if (this.grappleTarget) {
+      // The pull owns the movement completely: no gravity, no ground friction,
+      // no air steering. The body is driven straight at the anchor.
+      this.applyGrapplePull(scaledDt, position);
     } else {
       if (input.dashPressed && this.dashCharge >= 1) {
         this.startDash(lookDirection);
@@ -559,8 +685,8 @@ export class FirstPersonController {
       // Snap-to-ground keeps the controller glued to slopes, but it would
       // also swallow the first frames of a jump as a tiny 0.01m hop.
       // Disable it while rising and during the short post-jump grace window.
-      // A live zip also disables it so the tether can pull the player up.
-      if (this.vy > 0 || this.jumpGraceTimer > 0 || this.zipTarget) {
+      // A live pull also disables it so the hook can pull the player up.
+      if (this.vy > 0 || this.jumpGraceTimer > 0 || this.grappleTarget) {
         this.charController.disableSnapToGround();
       } else {
         this.charController.enableSnapToGround(0.5);
@@ -569,29 +695,26 @@ export class FirstPersonController {
       this.charController.computeColliderMovement(this.collider, movement);
       const corrected = this.charController.computedMovement();
 
-      // Arrival: once the player is within range of the arrival point the
-      // grapple pops off and the velocity is damped to a clean landing.
-      if (this.zipTarget) {
-        const target = this.zipTarget;
+      // Arrival: once the player is within range of the anchor the hook pops
+      // off and the ledge vault carries the player up and over it. The player
+      // is never snapped onto the anchor - teleporting into the geometry used
+      // to push the capsule straight back down.
+      if (this.grappleTarget) {
+        const target = this.grappleTarget;
         const next = new BABYLON.Vector3(
           position.x + corrected.x,
           position.y + corrected.y,
           position.z + corrected.z,
         );
-        if (BABYLON.Vector3.Distance(next, target) <= MOVEMENT.GRAPPLE_ZIP_ARRIVE_DISTANCE) {
-          // Land exactly on the arrival point instead of overshooting it.
-          corrected.x = target.x - position.x;
-          corrected.y = target.y - position.y;
-          corrected.z = target.z - position.z;
-          this.finishZip();
+        if (BABYLON.Vector3.Distance(next, target) <= GRAPPLE_CONFIG.DETACH_DISTANCE) {
+          this.vaultOverLedge(target.subtract(next));
         } else {
-          // Blocked by geometry: end the zip early so the player can never
+          // Blocked by geometry: end the pull early so the player can never
           // get stuck against a wall or a ledge.
           const intended = Math.hypot(movement.x, movement.y, movement.z);
           const actual = Math.hypot(corrected.x, corrected.y, corrected.z);
           if (intended > 0.05 && actual < intended * 0.25) {
-            this.brakeZip();
-            this.cancelZip(true);
+            this.endGrapplePull('cancelled', true);
           }
         }
       }
@@ -1297,15 +1420,13 @@ export class FirstPersonController {
       (speed - MOVEMENT.FOV_SPEED_START) / (MOVEMENT.FOV_SPEED_MAX - MOVEMENT.FOV_SPEED_START),
     ));
     const boostZoom = this.sensoryBoostActive ? -0.05 : 0;
-    // The zip gets its own FOV punch so the pull reads as a speed effect
-    // instead of a constant glide.
-    const zipFov = this.zipTarget
-      ? MOVEMENT.GRAPPLE_ZIP_FOV * Math.sin(Math.PI * this.getZipProgress())
-      : 0;
+    // The pull gets its own FOV kick so the ride reads as a speed effect
+    // instead of a constant glide. It fades back out after the release.
+    const grappleFov = this.grappleFov * GRAPPLE_CONFIG.FOV_KICK;
     const targetFov = MOVEMENT.BASE_FOV
       + MOVEMENT.MAX_FOV_WIDEN * fovProgress
       + boostZoom
-      + zipFov;
+      + grappleFov;
     const fovBlend = 1 - Math.exp(-MOVEMENT.CAMERA_FOV_RESPONSE * dt);
     this.cameraFov += (targetFov - this.cameraFov) * fovBlend;
     this.camera.fov = this.cameraFov;
@@ -1319,38 +1440,27 @@ export class FirstPersonController {
     const rollBlend = 1 - Math.exp(-MOVEMENT.CAMERA_FOV_RESPONSE * dt);
     this.slideCameraRoll += (targetSlideRoll - this.slideCameraRoll) * rollBlend;
 
-    // Lean into the zip: the camera rolls away from the travel direction.
-    if (this.zipTarget) {
-      const targetZipRoll = Math.max(-1, Math.min(1, lateralSpeed)) * MOVEMENT.GRAPPLE_ZIP_ROLL;
-      const zipRollBlend = 1 - Math.exp(-6 * dt);
-      this.zipRoll += (targetZipRoll - this.zipRoll) * zipRollBlend;
+    // Lean into the pull: the camera rolls away from the travel direction.
+    if (this.grappleTarget) {
+      const targetGrappleRoll = Math.max(-1, Math.min(1, lateralSpeed)) * GRAPPLE_CONFIG.ROLL;
+      const grappleRollBlend = 1 - Math.exp(-6 * dt);
+      this.grappleRoll += (targetGrappleRoll - this.grappleRoll) * grappleRollBlend;
     } else {
-      this.zipRoll += (0 - this.zipRoll) * (1 - Math.exp(-10 * dt));
+      this.grappleRoll += (0 - this.grappleRoll) * (1 - Math.exp(-10 * dt));
     }
-  }
-
-  /** Progress through the zip: 0 at the start, 1 at the arrival point. */
-  private getZipProgress(): number {
-    if (!this.zipTarget) return 0;
-    const remaining = BABYLON.Vector3.Distance(this.position, this.zipTarget);
-    return BABYLON.Scalar.Clamp(
-      1 - remaining / Math.max(this.zipDistance, 0.001),
-      0,
-      1,
-    );
   }
 
   private applyCameraRotation() {
     this.camera.rotationQuaternion = null;
-    // A short decaying shake on launch gives the zip some punch.
-    const shake = this.zipShake * this.zipShake;
+    // A short decaying shake on launch gives the pull some punch.
+    const shake = this.grappleShake * this.grappleShake;
     const shakePitch = (Math.random() - 0.5) * 0.03 * shake;
     const shakeYaw = (Math.random() - 0.5) * 0.03 * shake;
     const shakeRoll = (Math.random() - 0.5) * 0.045 * shake;
     this.camera.rotation.set(
       this.pitch + shakePitch,
       this.yaw + shakeYaw,
-      this.cameraRoll + this.slideCameraRoll + this.zipRoll + shakeRoll,
+      this.cameraRoll + this.slideCameraRoll + this.grappleRoll + shakeRoll,
     );
   }
 
@@ -1420,7 +1530,7 @@ export class FirstPersonController {
     const base = Math.max(0, Math.min(1, (speed - 10) / 22));
     const dashBoost = this.isDashing ? 0.55 : 0;
     const slideBoost = this.sliding ? Math.min(0.25, this.horizontalSpeed / 80) : 0;
-    const zipBoost = this.zipTarget ? 0.35 : 0;
-    return Math.max(0, Math.min(1, base + dashBoost + slideBoost + zipBoost));
+    const grappleBoost = this.grappleTarget ? 0.4 : 0;
+    return Math.max(0, Math.min(1, base + dashBoost + slideBoost + grappleBoost));
   }
 }

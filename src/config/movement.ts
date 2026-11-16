@@ -53,24 +53,7 @@ export const MOVEMENT_CONFIG = {
   MANTLE_MAX_LEDGE_HEIGHT: 1.55,
   MANTLE_DURATION: 0.28,
   MANTLE_FORWARD_PUSH: 0.55,
-  // Grapple hook: a single tap zips the player to the ring.
-  GRAPPLE_ZIP_SPEED: 15.5,
-  GRAPPLE_ZIP_ARRIVE_DISTANCE: 1.8,
-  // The player stops this far above the ring so they clear the ledge.
-  GRAPPLE_ZIP_HEIGHT: 1.35,
-  GRAPPLE_ZIP_BRAKE_SPEED: 6.5,
-  GRAPPLE_ZIP_BRAKE_VY: 2,
-  GRAPPLE_COOLDOWN: 0.35,
-  // Speed shaping: the zip kicks off fast, settles into a cruise and then
-  // boosts again into the ring. A constant speed feels like floating.
-  GRAPPLE_ZIP_LAUNCH_SPEED: 26,
-  GRAPPLE_ZIP_END_SPEED: 21,
-  // Upward bow of the zip path, so it reads as a pulled line.
-  GRAPPLE_ZIP_ARC: 0.26,
-  // Extra field of view while the zip is running.
-  GRAPPLE_ZIP_FOV: 0.11,
-  // Camera lean into the zip direction.
-  GRAPPLE_ZIP_ROLL: 0.14,
+  // The grapple hook has its own tuning surface in `config/grapple.ts`.
   CAMERA_HEIGHT_RESPONSE: 13,
   CAMERA_FOV_RESPONSE: 10,
   CAMERA_SLIDE_ROLL: 0.045,

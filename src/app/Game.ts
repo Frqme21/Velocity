@@ -7,7 +7,6 @@ import { createGraybox } from '../world/maps/graybox';
 import { KatanaViewmodel } from '../world/KatanaViewmodel';
 import { Grappler } from '../world/Grappler';
 import { HUD } from '../ui/HUD';
-import { MOVEMENT_CONFIG } from '../config/movement';
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -93,19 +92,18 @@ export class Game {
       this.controller.rigidBody,
     );
     for (const anchor of graybox.grappleAnchors) {
-      this.grappler.addAnchor(anchor);
+      this.grappler.addAnchor(anchor.position, anchor.landing);
     }
     this.input.onGrapplePressed = () => {
       this.grappler.fire();
     };
 
-    // A single tap zips the player to the ring. The controller owns the
-    // movement, the grappler owns the line and the cooldown.
-    this.grappler.onFire = (targetPos) => {
-      const arrival = targetPos.add(new BABYLON.Vector3(0, MOVEMENT_CONFIG.GRAPPLE_ZIP_HEIGHT, 0));
-      this.controller.startZip(arrival);
+    // A single tap fires the hook. The controller owns the pull, the vault
+    // and the landing; the grappler owns the targeting and the cooldown.
+    this.grappler.onFire = (anchorPos, landingPos) => {
+      this.controller.startGrapplePull(anchorPos, landingPos);
     };
-    this.controller.onZipFinished = () => {
+    this.controller.onGrappleFinished = () => {
       this.grappler.detach();
     };
 
@@ -122,6 +120,7 @@ export class Game {
       katana: this.katana,
       grappler: this.grappler,
       controller: this.controller,
+      input: this.input,
     };
 
     this.engine.runRenderLoop(() => {
@@ -157,8 +156,6 @@ export class Game {
         dashing: this.controller.isDashing,
         sliding: this.controller.isSliding,
         sensoryBoost: this.controller.isSensoryBoosting,
-        grappleReady: this.grappler.hasTarget,
-        grappling: this.grappler.isAttached,
       });
       this.scene.render();
     });

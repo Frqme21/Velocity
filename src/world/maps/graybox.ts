@@ -5,11 +5,21 @@ export interface GrayboxWorld {
   spawn: BABYLON.Vector3;
   meshes: BABYLON.AbstractMesh[];
   /** Tips of the cranes, used as grapple anchors. */
-  grappleAnchors: BABYLON.Vector3[];
+  grappleAnchors: GrappleAnchorPoint[];
+}
+
+/** A grapple ring plus the spot its vault should land the player on. */
+export interface GrappleAnchorPoint {
+  /** Where the ring is. */
+  position: BABYLON.Vector3;
+  /** The platform surface the vault should carry the player onto. */
+  landing: BABYLON.Vector3;
 }
 
 interface BoxOptions {
   yaw?: number;
+  /** Roll around the box's long axis, used to tilt the crane beams. */
+  roll?: number;
   color?: string;
 }
 
@@ -24,7 +34,7 @@ export function createGraybox(
   shadowGenerator?: BABYLON.ShadowGenerator,
 ): GrayboxWorld {
   const meshes: BABYLON.AbstractMesh[] = [];
-  const grappleAnchors: BABYLON.Vector3[] = [];
+  const grappleAnchors: GrappleAnchorPoint[] = [];
   const floorMaterial = makeMaterial(scene, 'floor', '#3d4650');
   const platformMaterial = makeMaterial(scene, 'platform', '#586574');
   const accentMaterial = makeMaterial(scene, 'accent', '#d69b42');
@@ -44,6 +54,7 @@ export function createGraybox(
     }, scene);
     mesh.position.copyFrom(position);
     mesh.rotation.y = options.yaw ?? 0;
+    mesh.rotation.z = options.roll ?? 0;
     mesh.material = options.color === 'accent'
       ? accentMaterial
       : options.color === 'obstacle'
@@ -59,8 +70,14 @@ export function createGraybox(
       RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z),
     );
     const collider = RAPIER.ColliderDesc.cuboid(size.x / 2, size.y / 2, size.z / 2);
-    if (options.yaw) {
-      collider.setRotation({ x: 0, y: Math.sin(options.yaw / 2), z: 0, w: Math.cos(options.yaw / 2) });
+    if (options.yaw || options.roll) {
+      // Same composition as Babylon's yaw/pitch/roll euler order.
+      const rotation = BABYLON.Quaternion.RotationYawPitchRoll(
+        options.yaw ?? 0,
+        0,
+        options.roll ?? 0,
+      );
+      collider.setRotation({ x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w });
     }
     physics.createCollider(collider, body);
     return mesh;
@@ -98,9 +115,14 @@ export function createGraybox(
   };
 
   /**
-   * A crane: a vertical mast with a horizontal jib. The jib stops short of
-   * the anchor, so the green grapple ring is the clean visible tip, and a
-   * landing deck hangs below it for the zip arrival.
+   * A crane: a vertical mast with a slightly tilted jib and a landing
+   * platform cantilevered past the tip.
+   *
+   * The jib stops short of the anchor, so the green grapple ring is the clean
+   * visible tip. The platform hangs past the tip, which means a grapple that
+   * vaults over the anchor lands on the platform instead of dropping into the
+   * void. The platform also starts past the anchor, so it never blocks the
+   * line of sight to the ring.
    */
   const addCrane = (
     name: string,
@@ -117,16 +139,26 @@ export function createGraybox(
     );
     mast.receiveShadows = true;
 
-    // The tip of the jib is removed: the beam ends before the anchor.
-    const tipGap = 0.45;
+    // A small tilt gives the cranes a less rigid silhouette.
+    const tilt = 0.055;
+    const armDirection = new BABYLON.Vector3(Math.sin(armYaw), 0, Math.cos(armYaw));
+
+    // The beam stops short of the anchor: the ring is the clean visible tip.
+    const tipGap = 0.3;
     const jibLength = armLength - tipGap;
+    const jibAxis = new BABYLON.Vector3(
+      armDirection.x * Math.cos(tilt),
+      -Math.sin(tilt),
+      armDirection.z * Math.cos(tilt),
+    );
     const armCenter = new BABYLON.Vector3(
-      base.x + Math.sin(armYaw) * (jibLength / 2),
-      base.y + height,
-      base.z + Math.cos(armYaw) * (jibLength / 2),
+      base.x + jibAxis.x * (jibLength / 2),
+      base.y + height + jibAxis.y * (jibLength / 2),
+      base.z + jibAxis.z * (jibLength / 2),
     );
     addBox(`${name}-jib`, armCenter, new BABYLON.Vector3(jibLength, 0.45, 0.45), {
       yaw: armYaw,
+      roll: -tilt,
       color: 'crane',
     });
 
@@ -142,28 +174,51 @@ export function createGraybox(
       { yaw: armYaw, color: 'crane' },
     );
 
-    // Landing deck under the jib tip. The player zips to the ring and drops
-    // onto this deck, so it sits low enough to clear the jib above it.
-    const deckLength = 5;
+    // Landing platform past the tip. The grapple vault carries the player up
+    // and over the anchor, and this is what they land on.
+    const deckLength = 6;
     const deckTop = height - 2.2;
-    const deckCenterDistance = armLength - tipGap - deckLength / 2;
+    const deckStart = armLength + 0.6;
+    const deckCenterDistance = deckStart + deckLength / 2;
     addBox(
       `${name}-deck`,
       new BABYLON.Vector3(
-        base.x + Math.sin(armYaw) * deckCenterDistance,
+        base.x + armDirection.x * deckCenterDistance,
         base.y + deckTop - 0.175,
-        base.z + Math.cos(armYaw) * deckCenterDistance,
+        base.z + armDirection.z * deckCenterDistance,
       ),
       new BABYLON.Vector3(deckLength, 0.35, 3),
       { yaw: armYaw, color: 'crane' },
     );
 
-    const anchor = new BABYLON.Vector3(
-      base.x + Math.sin(armYaw) * armLength,
-      base.y + height,
-      base.z + Math.cos(armYaw) * armLength,
+    // A slim strut under the outer edge of the platform.
+    const strutDistance = deckStart + deckLength - 0.5;
+    addBox(
+      `${name}-strut`,
+      new BABYLON.Vector3(
+        base.x + armDirection.x * strutDistance,
+        base.y + (deckTop - 0.35) / 2,
+        base.z + armDirection.z * strutDistance,
+      ),
+      new BABYLON.Vector3(0.3, deckTop - 0.35, 0.3),
+      { color: 'crane' },
     );
-    grappleAnchors.push(anchor);
+
+    // The anchor sits at the tilted tip of the jib.
+    const anchor = new BABYLON.Vector3(
+      base.x + jibAxis.x * armLength,
+      base.y + height + jibAxis.y * armLength,
+      base.z + jibAxis.z * armLength,
+    );
+
+    // The vault should drop the player onto the platform, not into the void.
+    const landing = new BABYLON.Vector3(
+      base.x + armDirection.x * deckCenterDistance,
+      base.y + deckTop,
+      base.z + armDirection.z * deckCenterDistance,
+    );
+
+    grappleAnchors.push({ position: anchor, landing });
     return anchor;
   };
 
