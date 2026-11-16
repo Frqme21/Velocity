@@ -49,6 +49,11 @@ export class InputManager {
   /** Fired whenever pointer lock is gained or lost. */
   public onPointerLockChange?: (locked: boolean) => void;
 
+  /** Fired when the grapple button (right mouse) is pressed. */
+  public onGrapplePressed?: () => void;
+
+  private grappleMouseDown = false;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
 
@@ -75,6 +80,22 @@ export class InputManager {
 
     canvas.addEventListener('click', () => {
       if (!this.locked) this.requestPointerLock();
+    });
+
+    // Right mouse fires the grapple.
+    canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+    canvas.addEventListener('mousedown', (event) => {
+      if (!this.locked || event.button !== 2) return;
+      event.preventDefault();
+      this.grappleMouseDown = true;
+      this.onGrapplePressed?.();
+    });
+    window.addEventListener('mouseup', (event) => {
+      if (event.button === 2) this.grappleMouseDown = false;
+    });
+    window.addEventListener('blur', () => {
+      this.keys.clear();
+      this.grappleMouseDown = false;
     });
 
     document.addEventListener('pointerlockchange', () => {
@@ -130,6 +151,11 @@ export class InputManager {
 
   get isLocked() {
     return this.locked;
+  }
+
+  /** True while the grapple button (right mouse) is held down. */
+  get grappleHeld() {
+    return this.grappleMouseDown;
   }
 
   /** Read input and clear the per-frame mouse deltas. */

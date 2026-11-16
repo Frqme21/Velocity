@@ -4,6 +4,8 @@ import * as RAPIER from '@dimforge/rapier3d-compat';
 export interface GrayboxWorld {
   spawn: BABYLON.Vector3;
   meshes: BABYLON.AbstractMesh[];
+  /** Tips of the cranes, used as grapple anchors. */
+  grappleAnchors: BABYLON.Vector3[];
 }
 
 interface BoxOptions {
@@ -22,10 +24,12 @@ export function createGraybox(
   shadowGenerator?: BABYLON.ShadowGenerator,
 ): GrayboxWorld {
   const meshes: BABYLON.AbstractMesh[] = [];
+  const grappleAnchors: BABYLON.Vector3[] = [];
   const floorMaterial = makeMaterial(scene, 'floor', '#3d4650');
   const platformMaterial = makeMaterial(scene, 'platform', '#586574');
   const accentMaterial = makeMaterial(scene, 'accent', '#d69b42');
   const obstacleMaterial = makeMaterial(scene, 'obstacle', '#7b8794');
+  const craneMaterial = makeMaterial(scene, 'crane', '#c8a13a');
 
   const addBox = (
     name: string,
@@ -44,7 +48,9 @@ export function createGraybox(
       ? accentMaterial
       : options.color === 'obstacle'
         ? obstacleMaterial
-        : platformMaterial;
+        : options.color === 'crane'
+          ? craneMaterial
+          : platformMaterial;
     mesh.receiveShadows = true;
     shadowGenerator?.addShadowCaster(mesh);
     meshes.push(mesh);
@@ -89,6 +95,76 @@ export function createGraybox(
     collider.setRotation({ x: 0, y: 0, z: Math.sin(angle / 2), w: Math.cos(angle / 2) });
     physics.createCollider(collider, body);
     return mesh;
+  };
+
+  /**
+   * A crane: a vertical mast with a horizontal jib. The jib stops short of
+   * the anchor, so the green grapple ring is the clean visible tip, and a
+   * landing deck hangs below it for the zip arrival.
+   */
+  const addCrane = (
+    name: string,
+    base: BABYLON.Vector3,
+    height: number,
+    armLength: number,
+    armYaw: number,
+  ) => {
+    const mast = addBox(
+      `${name}-mast`,
+      new BABYLON.Vector3(base.x, base.y + height / 2, base.z),
+      new BABYLON.Vector3(0.9, height, 0.9),
+      { color: 'crane' },
+    );
+    mast.receiveShadows = true;
+
+    // The tip of the jib is removed: the beam ends before the anchor.
+    const tipGap = 0.45;
+    const jibLength = armLength - tipGap;
+    const armCenter = new BABYLON.Vector3(
+      base.x + Math.sin(armYaw) * (jibLength / 2),
+      base.y + height,
+      base.z + Math.cos(armYaw) * (jibLength / 2),
+    );
+    addBox(`${name}-jib`, armCenter, new BABYLON.Vector3(jibLength, 0.45, 0.45), {
+      yaw: armYaw,
+      color: 'crane',
+    });
+
+    // A counterweight box on the opposite side keeps the silhouette readable.
+    addBox(
+      `${name}-counterweight`,
+      new BABYLON.Vector3(
+        base.x - Math.sin(armYaw) * 1.1,
+        base.y + height,
+        base.z - Math.cos(armYaw) * 1.1,
+      ),
+      new BABYLON.Vector3(1.6, 1.1, 1.1),
+      { yaw: armYaw, color: 'crane' },
+    );
+
+    // Landing deck under the jib tip. The player zips to the ring and drops
+    // onto this deck, so it sits low enough to clear the jib above it.
+    const deckLength = 5;
+    const deckTop = height - 2.2;
+    const deckCenterDistance = armLength - tipGap - deckLength / 2;
+    addBox(
+      `${name}-deck`,
+      new BABYLON.Vector3(
+        base.x + Math.sin(armYaw) * deckCenterDistance,
+        base.y + deckTop - 0.175,
+        base.z + Math.cos(armYaw) * deckCenterDistance,
+      ),
+      new BABYLON.Vector3(deckLength, 0.35, 3),
+      { yaw: armYaw, color: 'crane' },
+    );
+
+    const anchor = new BABYLON.Vector3(
+      base.x + Math.sin(armYaw) * armLength,
+      base.y + height,
+      base.z + Math.cos(armYaw) * armLength,
+    );
+    grappleAnchors.push(anchor);
+    return anchor;
   };
 
   // The floor is split into a 6.2m-wide trench. The two wall-run panels sit
@@ -182,9 +258,16 @@ export function createGraybox(
     color: 'accent',
   });
 
+  // Cranes with grapple anchors on their jib tips.
+  addCrane('crane-west', new BABYLON.Vector3(-22, 0, 6), 9, 5.5, Math.PI / 2);
+  addCrane('crane-east', new BABYLON.Vector3(24, 0, -10), 12, 6.5, -Math.PI / 2);
+  addCrane('crane-north', new BABYLON.Vector3(-4, 0, 28), 11, 6, Math.PI);
+  addCrane('crane-south', new BABYLON.Vector3(8, 0, -30), 8, 5, 0);
+
   return {
     spawn: new BABYLON.Vector3(13.05, 1, 2),
     meshes,
+    grappleAnchors,
   };
 }
 

@@ -21,6 +21,7 @@ const MOVEMENT = {
   DASH_RECHARGE_TIME: MOVEMENT_CONFIG.DASH_RECHARGE_TIME,
   DASH_VERTICAL_INFLUENCE: MOVEMENT_CONFIG.DASH_VERTICAL_INFLUENCE,
   DASH_VERTICAL_DOWN_INFLUENCE: MOVEMENT_CONFIG.DASH_VERTICAL_DOWN_INFLUENCE,
+  DASH_VERTICAL_DEAD_ZONE: MOVEMENT_CONFIG.DASH_VERTICAL_DEAD_ZONE,
   DASH_VERTICAL_UP_MAX: MOVEMENT_CONFIG.DASH_VERTICAL_UP_MAX,
   DASH_VERTICAL_DOWN_MAX: MOVEMENT_CONFIG.DASH_VERTICAL_DOWN_MAX,
   SENSORY_BOOST_DURATION: MOVEMENT_CONFIG.SENSORY_BOOST_DURATION,
@@ -55,6 +56,16 @@ const MOVEMENT = {
   MANTLE_MAX_LEDGE_HEIGHT: MOVEMENT_CONFIG.MANTLE_MAX_LEDGE_HEIGHT,
   MANTLE_DURATION: MOVEMENT_CONFIG.MANTLE_DURATION,
   MANTLE_FORWARD_PUSH: MOVEMENT_CONFIG.MANTLE_FORWARD_PUSH,
+  GRAPPLE_ZIP_SPEED: MOVEMENT_CONFIG.GRAPPLE_ZIP_SPEED,
+  GRAPPLE_ZIP_ARRIVE_DISTANCE: MOVEMENT_CONFIG.GRAPPLE_ZIP_ARRIVE_DISTANCE,
+  GRAPPLE_ZIP_HEIGHT: MOVEMENT_CONFIG.GRAPPLE_ZIP_HEIGHT,
+  GRAPPLE_ZIP_BRAKE_SPEED: MOVEMENT_CONFIG.GRAPPLE_ZIP_BRAKE_SPEED,
+  GRAPPLE_ZIP_BRAKE_VY: MOVEMENT_CONFIG.GRAPPLE_ZIP_BRAKE_VY,
+  GRAPPLE_ZIP_LAUNCH_SPEED: MOVEMENT_CONFIG.GRAPPLE_ZIP_LAUNCH_SPEED,
+  GRAPPLE_ZIP_END_SPEED: MOVEMENT_CONFIG.GRAPPLE_ZIP_END_SPEED,
+  GRAPPLE_ZIP_ARC: MOVEMENT_CONFIG.GRAPPLE_ZIP_ARC,
+  GRAPPLE_ZIP_FOV: MOVEMENT_CONFIG.GRAPPLE_ZIP_FOV,
+  GRAPPLE_ZIP_ROLL: MOVEMENT_CONFIG.GRAPPLE_ZIP_ROLL,
   CAMERA_HEIGHT_RESPONSE: MOVEMENT_CONFIG.CAMERA_HEIGHT_RESPONSE,
   CAMERA_FOV_RESPONSE: MOVEMENT_CONFIG.CAMERA_FOV_RESPONSE,
   CAMERA_SLIDE_ROLL: MOVEMENT_CONFIG.CAMERA_SLIDE_ROLL,
@@ -159,6 +170,27 @@ export class FirstPersonController {
     end: BABYLON.Vector3.Zero(),
   };
 
+  /**
+   * Active one-tap zip. While set, the player is pulled straight towards the
+   * arrival position with gravity disabled.
+   */
+  private zipTarget: BABYLON.Vector3 | null = null;
+  /** Straight line distance to the arrival point when the zip started. */
+  private zipDistance = 0;
+  /** Time since the zip started, used for the speed shaping. */
+  private zipElapsed = 0;
+  /** Decaying launch shake, 1 at the start of the zip. */
+  private zipShake = 0;
+  /** Camera lean into the zip direction. */
+  private zipRoll = 0;
+
+  /**
+   * Called when a zip ends.
+   * `arrived` means the player reached the target, `cancelled` means the zip
+   * was interrupted (jump or dash).
+   */
+  public onZipFinished?: (reason: 'arrived' | 'cancelled') => void;
+
   public sensitivity = MOVEMENT.SENSITIVITY;
 
   constructor(
@@ -191,6 +223,131 @@ export class FirstPersonController {
     this.input.onMouseDelta = (dx, dy) => this.applyLookDelta(dx, dy);
   }
 
+  /**
+   * Start a one-tap zip towards `arrivalPos`.
+   *
+   * The player is moved straight along the line to the target at a fixed
+   * speed with gravity disabled, and the zip ends automatically on arrival.
+   */
+  startZip(arrivalPos: BABYLON.Vector3) {
+    if (this.zipTarget) this.cancelZip(false);
+
+    this.zipTarget = arrivalPos.clone();
+    this.zipElapsed = 0;
+    this.zipShake = 1;
+    this.zipRoll = 0;
+    this.zipDistance = BABYLON.Vector3.Distance(this.position, this.zipTarget);
+    this.velX = 0;
+    this.velZ = 0;
+    this.vy = 0;
+    this.grounded = false;
+    this.coyoteTimer = 0;
+    this.jumpGraceTimer = 0;
+    this.detachWallRun();
+    this.endSlide(false);
+    if (this.sensoryBoostActive) this.cancelSensoryBoost();
+  }
+
+  /** True while a zip is in progress. */
+  get isZipping(): boolean {
+    return this.zipTarget !== null;
+  }
+
+  /** Interrupt the zip. `notify` controls whether the callback fires. */
+  private cancelZip(notify: boolean) {
+    if (!this.zipTarget) return;
+    this.zipTarget = null;
+    this.zipRoll = 0;
+    if (notify) this.onZipFinished?.('cancelled');
+  }
+
+  /**
+   * Zip movement: the body is driven directly along the line to the arrival
+   * point. No gravity, no pendulum, but the speed is shaped so the zip
+   * kicks off hard, cruises and then boosts into the ring.
+   */
+  private applyZipMovement(dt: number, position: { x: number; y: number; z: number }) {
+    const target = this.zipTarget;
+    if (!target) return;
+
+    this.zipElapsed += dt;
+
+    const current = new BABYLON.Vector3(position.x, position.y, position.z);
+    const delta = target.subtract(current);
+    const distance = delta.length();
+
+    if (distance <= MOVEMENT.GRAPPLE_ZIP_ARRIVE_DISTANCE) {
+      this.finishZip();
+      return;
+    }
+
+    // 0 at the start of the zip, 1 at the arrival point.
+    const progress = BABYLON.Scalar.Clamp(
+      1 - distance / Math.max(this.zipDistance, 0.001),
+      0,
+      1,
+    );
+
+    const direction = delta.scale(1 / distance);
+    // A slight upward bow makes the zip read as a pulled line instead of a
+    // flat rail, without turning it into a pendulum swing.
+    direction.y += Math.sin(Math.PI * progress) * MOVEMENT.GRAPPLE_ZIP_ARC;
+    direction.normalize();
+
+    const speed = this.getZipSpeed(progress);
+    this.velX = direction.x * speed;
+    this.velZ = direction.z * speed;
+    this.vy = direction.y * speed;
+  }
+
+  /**
+   * The speed profile of the zip: a hard launch, a fast cruise and a final
+   * boost into the ring. A constant speed feels like floating.
+   */
+  private getZipSpeed(progress: number): number {
+    const keys: Array<[number, number]> = [
+      [0, MOVEMENT.GRAPPLE_ZIP_LAUNCH_SPEED],
+      [0.16, MOVEMENT.GRAPPLE_ZIP_SPEED],
+      [0.5, MOVEMENT.GRAPPLE_ZIP_SPEED * 0.86],
+      [0.78, MOVEMENT.GRAPPLE_ZIP_SPEED * 1.1],
+      [1, MOVEMENT.GRAPPLE_ZIP_END_SPEED],
+    ];
+
+    for (let i = 0; i < keys.length - 1; i++) {
+      const [fromP, fromSpeed] = keys[i];
+      const [toP, toSpeed] = keys[i + 1];
+      if (progress <= toP) {
+        const t = (progress - fromP) / Math.max(toP - fromP, 0.0001);
+        return BABYLON.Scalar.Lerp(fromSpeed, toSpeed, BABYLON.Scalar.Clamp(t, 0, 1));
+      }
+    }
+
+    return MOVEMENT.GRAPPLE_ZIP_END_SPEED;
+  }
+
+  /** Damp the current velocity down to a gentle forward settle. */
+  private brakeZip() {
+    const horizontalSpeed = Math.hypot(this.velX, this.velZ);
+    if (horizontalSpeed > MOVEMENT.GRAPPLE_ZIP_BRAKE_SPEED) {
+      const scale = MOVEMENT.GRAPPLE_ZIP_BRAKE_SPEED / horizontalSpeed;
+      this.velX *= scale;
+      this.velZ *= scale;
+    }
+    this.vy = MOVEMENT.GRAPPLE_ZIP_BRAKE_VY;
+  }
+
+  /**
+   * The player reached the target: detach the grapple and damp the velocity
+   * down to a clean landing.
+   */
+  private finishZip() {
+    if (!this.zipTarget) return;
+    this.zipTarget = null;
+    this.zipRoll = 0;
+    this.brakeZip();
+    this.onZipFinished?.('arrived');
+  }
+
   private applyLookDelta(dx: number, dy: number) {
     this.yaw += dx * this.sensitivity;
     this.pitch += dy * this.sensitivity;
@@ -203,6 +360,7 @@ export class FirstPersonController {
     const input = this.input.read();
 
     // Air Shift starts a slow-motion sensory boost instead of an air dash.
+    // A live zip takes priority: Shift cancels the zip and dashes instead.
     if (
       !this.sensoryBoostActive
       && input.dashPressed
@@ -210,6 +368,7 @@ export class FirstPersonController {
       && !this.grounded
       && !this.mantle.active
       && !this.sliding
+      && !this.zipTarget
     ) {
       this.startSensoryBoost();
     }
@@ -220,6 +379,7 @@ export class FirstPersonController {
     this.dashTimeRemaining = Math.max(0, this.dashTimeRemaining - scaledDt);
     this.jumpGraceTimer = Math.max(0, this.jumpGraceTimer - scaledDt);
     this.sensoryBoostSideCooldown = Math.max(0, this.sensoryBoostSideCooldown - dt);
+    this.zipShake = Math.max(0, this.zipShake - dt / 0.35);
     if (!this.sensoryBoostActive) {
       this.dashCharge = Math.min(
         1,
@@ -244,6 +404,19 @@ export class FirstPersonController {
       cosYaw * cosPitch,
     ).normalize();
     const right = new BABYLON.Vector3(cosYaw, 0, -sinYaw);
+
+    // Jump or dash immediately cancel a running zip.
+    if (this.zipTarget) {
+      if (input.dashPressed && this.dashCharge >= 1) {
+        this.cancelZip(true);
+        this.startDash(lookDirection);
+      } else if (input.jumpPressed) {
+        this.cancelZip(true);
+        this.vy = MOVEMENT.JUMP_VELOCITY;
+        this.grounded = false;
+        this.jumpGraceTimer = MOVEMENT.JUMP_GROUND_GRACE;
+      }
+    }
 
     let forward = 0;
     let strafe = 0;
@@ -273,6 +446,10 @@ export class FirstPersonController {
       this.updateSensoryBoost(dt, input, right, wishX, wishZ);
     } else if (this.mantle.active) {
       this.updateMantle(scaledDt, position);
+    } else if (this.zipTarget) {
+      // The zip owns the movement completely: no gravity, no ground friction,
+      // no air steering. The body is driven straight at the arrival point.
+      this.applyZipMovement(scaledDt, position);
     } else {
       if (input.dashPressed && this.dashCharge >= 1) {
         this.startDash(lookDirection);
@@ -382,7 +559,8 @@ export class FirstPersonController {
       // Snap-to-ground keeps the controller glued to slopes, but it would
       // also swallow the first frames of a jump as a tiny 0.01m hop.
       // Disable it while rising and during the short post-jump grace window.
-      if (this.vy > 0 || this.jumpGraceTimer > 0) {
+      // A live zip also disables it so the tether can pull the player up.
+      if (this.vy > 0 || this.jumpGraceTimer > 0 || this.zipTarget) {
         this.charController.disableSnapToGround();
       } else {
         this.charController.enableSnapToGround(0.5);
@@ -390,6 +568,33 @@ export class FirstPersonController {
 
       this.charController.computeColliderMovement(this.collider, movement);
       const corrected = this.charController.computedMovement();
+
+      // Arrival: once the player is within range of the arrival point the
+      // grapple pops off and the velocity is damped to a clean landing.
+      if (this.zipTarget) {
+        const target = this.zipTarget;
+        const next = new BABYLON.Vector3(
+          position.x + corrected.x,
+          position.y + corrected.y,
+          position.z + corrected.z,
+        );
+        if (BABYLON.Vector3.Distance(next, target) <= MOVEMENT.GRAPPLE_ZIP_ARRIVE_DISTANCE) {
+          // Land exactly on the arrival point instead of overshooting it.
+          corrected.x = target.x - position.x;
+          corrected.y = target.y - position.y;
+          corrected.z = target.z - position.z;
+          this.finishZip();
+        } else {
+          // Blocked by geometry: end the zip early so the player can never
+          // get stuck against a wall or a ledge.
+          const intended = Math.hypot(movement.x, movement.y, movement.z);
+          const actual = Math.hypot(corrected.x, corrected.y, corrected.z);
+          if (intended > 0.05 && actual < intended * 0.25) {
+            this.brakeZip();
+            this.cancelZip(true);
+          }
+        }
+      }
 
       const blockedBelow = movement.y < 0 && corrected.y > movement.y * 0.5;
       // A real landing ends the grace window immediately.
@@ -459,14 +664,36 @@ export class FirstPersonController {
   }
 
   private applyDashVelocity() {
-    this.velX = this.dashDirection.x * MOVEMENT.DASH_SPEED;
-    this.velZ = this.dashDirection.z * MOVEMENT.DASH_SPEED;
+    // The horizontal part of a dash always keeps its full speed: looking up or
+    // down only changes the vertical component, it never shortens the burst.
+    const flat = new BABYLON.Vector3(this.dashDirection.x, 0, this.dashDirection.z);
+    if (flat.lengthSquared() < 0.0001) flat.copyFrom(BABYLON.Axis.Z);
+    flat.normalize();
+
+    this.velX = flat.x * MOVEMENT.DASH_SPEED;
+    this.velZ = flat.z * MOVEMENT.DASH_SPEED;
     this.vy = this.getDashVerticalVelocity(this.dashDirection.y);
   }
 
-  /** Vertical dash component driven by pitch: look up to rise, down to dive. */
+  /**
+   * Vertical dash component driven by pitch: look up to rise, down to dive.
+   *
+   * The dead zone keeps a roughly horizontal view (or only a slight tilt)
+   * from launching the player into the floor or the ceiling. Only a clear
+   * look up/down past the dead zone adds vertical speed.
+   */
   private getDashVerticalVelocity(lookY: number): number {
-    const vertical = lookY * MOVEMENT.DASH_SPEED;
+    const deadZone = MOVEMENT.DASH_VERTICAL_DEAD_ZONE;
+    let y = lookY;
+    if (y > deadZone) {
+      y = (y - deadZone) / (1 - deadZone);
+    } else if (y < -deadZone) {
+      y = (y + deadZone) / (1 - deadZone);
+    } else {
+      y = 0;
+    }
+
+    const vertical = y * MOVEMENT.DASH_SPEED;
     return vertical >= 0
       ? Math.min(vertical * MOVEMENT.DASH_VERTICAL_INFLUENCE, MOVEMENT.DASH_VERTICAL_UP_MAX)
       : Math.max(vertical * MOVEMENT.DASH_VERTICAL_DOWN_INFLUENCE, -MOVEMENT.DASH_VERTICAL_DOWN_MAX);
@@ -1070,7 +1297,15 @@ export class FirstPersonController {
       (speed - MOVEMENT.FOV_SPEED_START) / (MOVEMENT.FOV_SPEED_MAX - MOVEMENT.FOV_SPEED_START),
     ));
     const boostZoom = this.sensoryBoostActive ? -0.05 : 0;
-    const targetFov = MOVEMENT.BASE_FOV + MOVEMENT.MAX_FOV_WIDEN * fovProgress + boostZoom;
+    // The zip gets its own FOV punch so the pull reads as a speed effect
+    // instead of a constant glide.
+    const zipFov = this.zipTarget
+      ? MOVEMENT.GRAPPLE_ZIP_FOV * Math.sin(Math.PI * this.getZipProgress())
+      : 0;
+    const targetFov = MOVEMENT.BASE_FOV
+      + MOVEMENT.MAX_FOV_WIDEN * fovProgress
+      + boostZoom
+      + zipFov;
     const fovBlend = 1 - Math.exp(-MOVEMENT.CAMERA_FOV_RESPONSE * dt);
     this.cameraFov += (targetFov - this.cameraFov) * fovBlend;
     this.camera.fov = this.cameraFov;
@@ -1083,11 +1318,40 @@ export class FirstPersonController {
       : 0;
     const rollBlend = 1 - Math.exp(-MOVEMENT.CAMERA_FOV_RESPONSE * dt);
     this.slideCameraRoll += (targetSlideRoll - this.slideCameraRoll) * rollBlend;
+
+    // Lean into the zip: the camera rolls away from the travel direction.
+    if (this.zipTarget) {
+      const targetZipRoll = Math.max(-1, Math.min(1, lateralSpeed)) * MOVEMENT.GRAPPLE_ZIP_ROLL;
+      const zipRollBlend = 1 - Math.exp(-6 * dt);
+      this.zipRoll += (targetZipRoll - this.zipRoll) * zipRollBlend;
+    } else {
+      this.zipRoll += (0 - this.zipRoll) * (1 - Math.exp(-10 * dt));
+    }
+  }
+
+  /** Progress through the zip: 0 at the start, 1 at the arrival point. */
+  private getZipProgress(): number {
+    if (!this.zipTarget) return 0;
+    const remaining = BABYLON.Vector3.Distance(this.position, this.zipTarget);
+    return BABYLON.Scalar.Clamp(
+      1 - remaining / Math.max(this.zipDistance, 0.001),
+      0,
+      1,
+    );
   }
 
   private applyCameraRotation() {
     this.camera.rotationQuaternion = null;
-    this.camera.rotation.set(this.pitch, this.yaw, this.cameraRoll + this.slideCameraRoll);
+    // A short decaying shake on launch gives the zip some punch.
+    const shake = this.zipShake * this.zipShake;
+    const shakePitch = (Math.random() - 0.5) * 0.03 * shake;
+    const shakeYaw = (Math.random() - 0.5) * 0.03 * shake;
+    const shakeRoll = (Math.random() - 0.5) * 0.045 * shake;
+    this.camera.rotation.set(
+      this.pitch + shakePitch,
+      this.yaw + shakeYaw,
+      this.cameraRoll + this.slideCameraRoll + this.zipRoll + shakeRoll,
+    );
   }
 
   /** Write the final camera transform immediately before rendering. */
@@ -1099,6 +1363,11 @@ export class FirstPersonController {
   get position(): BABYLON.Vector3 {
     const translation = this.body.translation();
     return new BABYLON.Vector3(translation.x, translation.y, translation.z);
+  }
+
+  /** The player body, used by systems that need to exclude it from queries. */
+  get rigidBody(): RAPIER.RigidBody {
+    return this.body;
   }
 
   get horizontalSpeed(): number {
@@ -1151,6 +1420,7 @@ export class FirstPersonController {
     const base = Math.max(0, Math.min(1, (speed - 10) / 22));
     const dashBoost = this.isDashing ? 0.55 : 0;
     const slideBoost = this.sliding ? Math.min(0.25, this.horizontalSpeed / 80) : 0;
-    return Math.max(0, Math.min(1, base + dashBoost + slideBoost));
+    const zipBoost = this.zipTarget ? 0.35 : 0;
+    return Math.max(0, Math.min(1, base + dashBoost + slideBoost + zipBoost));
   }
 }

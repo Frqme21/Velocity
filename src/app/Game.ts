@@ -5,7 +5,9 @@ import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { FirstPersonController } from '../world/FirstPersonController';
 import { createGraybox } from '../world/maps/graybox';
 import { KatanaViewmodel } from '../world/KatanaViewmodel';
+import { Grappler } from '../world/Grappler';
 import { HUD } from '../ui/HUD';
+import { MOVEMENT_CONFIG } from '../config/movement';
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -15,6 +17,7 @@ export class Game {
   private input!: InputManager;
   private controller!: FirstPersonController;
   private katana!: KatanaViewmodel;
+  private grappler!: Grappler;
   private hud!: HUD;
   private physics!: PhysicsWorld;
   private rapierWorld!: RAPIER.World;
@@ -83,6 +86,29 @@ export class Game {
 
     this.hud = new HUD(document.getElementById('hud')!);
 
+    this.grappler = new Grappler(
+      this.scene,
+      this.camera,
+      this.rapierWorld,
+      this.controller.rigidBody,
+    );
+    for (const anchor of graybox.grappleAnchors) {
+      this.grappler.addAnchor(anchor);
+    }
+    this.input.onGrapplePressed = () => {
+      this.grappler.fire();
+    };
+
+    // A single tap zips the player to the ring. The controller owns the
+    // movement, the grappler owns the line and the cooldown.
+    this.grappler.onFire = (targetPos) => {
+      const arrival = targetPos.add(new BABYLON.Vector3(0, MOVEMENT_CONFIG.GRAPPLE_ZIP_HEIGHT, 0));
+      this.controller.startZip(arrival);
+    };
+    this.controller.onZipFinished = () => {
+      this.grappler.detach();
+    };
+
     this.katana = new KatanaViewmodel(this.scene, this.camera);
     try {
       await this.katana.load();
@@ -94,12 +120,19 @@ export class Game {
       scene: this.scene,
       camera: this.camera,
       katana: this.katana,
+      grappler: this.grappler,
+      controller: this.controller,
     };
 
     this.engine.runRenderLoop(() => {
       const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
+
+      // The movement runs first, then the grapple visuals are refreshed so the
+      // tether starts at the player's current off-hand position and ends
+      // exactly at the center of the locked ring.
       this.controller.update(dt);
       this.physics.step();
+      this.grappler.update(dt);
 
       // Write the final camera transform after physics and immediately before
       // rendering, so camera.rotation can never lag behind by one frame.
@@ -124,6 +157,8 @@ export class Game {
         dashing: this.controller.isDashing,
         sliding: this.controller.isSliding,
         sensoryBoost: this.controller.isSensoryBoosting,
+        grappleReady: this.grappler.hasTarget,
+        grappling: this.grappler.isAttached,
       });
       this.scene.render();
     });

@@ -7,6 +7,10 @@ export interface HUDState {
   dashing: boolean;
   sliding: boolean;
   sensoryBoost: boolean;
+  /** A grapple anchor is in range and aimed at. */
+  grappleReady: boolean;
+  /** The grapple tether is currently attached. */
+  grappling: boolean;
 }
 
 export class HUD {
@@ -15,6 +19,7 @@ export class HUD {
   private dashFillElement: SVGPathElement;
   private speedLinesElement: HTMLElement;
   private sensoryOverlayElement: HTMLElement;
+  private grappleHintElement: HTMLElement;
 
   constructor(root: HTMLElement) {
     root.innerHTML = `
@@ -31,12 +36,14 @@ export class HUD {
         <span id="speed">0.00 m/s</span>
         <span id="fps">0 FPS</span>
       </div>
+      <div id="grapple-hint" aria-hidden="true">RIGHT MOUSE · GRAPPLE</div>
     `;
     this.speedElement = root.querySelector<HTMLElement>('#speed')!;
     this.fpsElement = root.querySelector<HTMLElement>('#fps')!;
     this.dashFillElement = root.querySelector<SVGPathElement>('#dash-fill')!;
     this.speedLinesElement = root.querySelector<HTMLElement>('#speed-lines')!;
     this.sensoryOverlayElement = root.querySelector<HTMLElement>('#sensory-overlay')!;
+    this.grappleHintElement = root.querySelector<HTMLElement>('#grapple-hint')!;
   }
 
   update(state: HUDState) {
@@ -55,5 +62,12 @@ export class HUD {
 
     document.body.classList.toggle('sensory-boost', state.sensoryBoost);
     this.sensoryOverlayElement.style.opacity = state.sensoryBoost ? '1' : '0';
+
+    const grappleText = state.grappling ? 'ZIP ACTIVE' : 'RIGHT MOUSE · GRAPPLE';
+    if (this.grappleHintElement.textContent !== grappleText) {
+      this.grappleHintElement.textContent = grappleText;
+    }
+    this.grappleHintElement.classList.toggle('ready', state.grappleReady);
+    this.grappleHintElement.classList.toggle('attached', state.grappling);
   }
 }
