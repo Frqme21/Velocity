@@ -8,6 +8,10 @@ export interface InputState {
   jumpPressed: boolean;
   /** True only on the frame a dash key is pressed. */
   dashPressed: boolean;
+  /** True while a slide key is held. */
+  slide: boolean;
+  /** True only on the frame a slide key is pressed. */
+  slidePressed: boolean;
   mouseDX: number;
   mouseDY: number;
 }
@@ -21,6 +25,7 @@ export class InputManager {
   private dy = 0;
   private jumpLatch = false;
   private dashLatch = false;
+  private slideLatch = false;
   private locked = false;
   private canvas: HTMLCanvasElement;
 
@@ -45,6 +50,9 @@ export class InputManager {
       if (event.code === 'Space' && !event.repeat) this.jumpLatch = true;
       if ((event.code === 'ShiftLeft' || event.code === 'ShiftRight') && !event.repeat) {
         this.dashLatch = true;
+      }
+      if ((event.code === 'ControlLeft' || event.code === 'ControlRight') && !event.repeat) {
+        this.slideLatch = true;
       }
       this.keys.add(event.code);
     });
@@ -121,6 +129,7 @@ export class InputManager {
     this.dy = 0;
     this.jumpLatch = false;
     this.dashLatch = false;
+    this.slideLatch = false;
     return state;
   }
 
@@ -133,6 +142,8 @@ export class InputManager {
       jump: this.keys.has('Space'),
       jumpPressed: this.jumpLatch,
       dashPressed: this.dashLatch,
+      slide: this.keys.has('ControlLeft') || this.keys.has('ControlRight'),
+      slidePressed: this.slideLatch,
       mouseDX: this.dx,
       mouseDY: this.dy,
     };

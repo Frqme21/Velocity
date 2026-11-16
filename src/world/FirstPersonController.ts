@@ -19,6 +19,28 @@ const MOVEMENT = {
   DASH_AIR_BOOST: MOVEMENT_CONFIG.DASH_AIR_BOOST,
   DASH_AIR_MAX_SPEED: MOVEMENT_CONFIG.DASH_AIR_MAX_SPEED,
   AIR_DASH_LIFT: MOVEMENT_CONFIG.AIR_DASH_LIFT,
+  SLIDE_MIN_SPEED: MOVEMENT_CONFIG.SLIDE_MIN_SPEED,
+  SLIDE_STOP_SPEED: MOVEMENT_CONFIG.SLIDE_STOP_SPEED,
+  SLIDE_IMPULSE: MOVEMENT_CONFIG.SLIDE_IMPULSE,
+  SLIDE_MAX_SPEED: MOVEMENT_CONFIG.SLIDE_MAX_SPEED,
+  SLIDE_SLOPE_MAX_SPEED: MOVEMENT_CONFIG.SLIDE_SLOPE_MAX_SPEED,
+  SLIDE_LOW_FRICTION: MOVEMENT_CONFIG.SLIDE_LOW_FRICTION,
+  SLIDE_HIGH_FRICTION: MOVEMENT_CONFIG.SLIDE_HIGH_FRICTION,
+  SLIDE_FRICTION_RAMP: MOVEMENT_CONFIG.SLIDE_FRICTION_RAMP,
+  SLIDE_COOLDOWN: MOVEMENT_CONFIG.SLIDE_COOLDOWN,
+  SLIDE_CARVE_ACCEL: MOVEMENT_CONFIG.SLIDE_CARVE_ACCEL,
+  SLIDE_SLOPE_ACCEL: MOVEMENT_CONFIG.SLIDE_SLOPE_ACCEL,
+  SLIDE_HOP_BOOST: MOVEMENT_CONFIG.SLIDE_HOP_BOOST,
+  SLIDE_FALL_CONVERSION: MOVEMENT_CONFIG.SLIDE_FALL_CONVERSION,
+  SLIDE_FALL_CONVERSION_MAX: MOVEMENT_CONFIG.SLIDE_FALL_CONVERSION_MAX,
+  SLIDE_EYE_OFFSET: MOVEMENT_CONFIG.SLIDE_EYE_OFFSET,
+  CAMERA_HEIGHT_RESPONSE: MOVEMENT_CONFIG.CAMERA_HEIGHT_RESPONSE,
+  CAMERA_FOV_RESPONSE: MOVEMENT_CONFIG.CAMERA_FOV_RESPONSE,
+  CAMERA_SLIDE_ROLL: MOVEMENT_CONFIG.CAMERA_SLIDE_ROLL,
+  BASE_FOV: (90 * Math.PI) / 180,
+  MAX_FOV_WIDEN: (12 * Math.PI) / 180,
+  FOV_SPEED_START: 6,
+  FOV_SPEED_MAX: 17.5,
   GROUND_STICK: 1.2,
   PLAYER_RADIUS: MOVEMENT_CONFIG.PLAYER_RADIUS,
   PLAYER_HEIGHT: MOVEMENT_CONFIG.PLAYER_HEIGHT,
@@ -66,6 +88,16 @@ export class FirstPersonController {
   private velZ = 0;
   private grounded = false;
   private dashCharge = 1;
+  private sliding = false;
+  private slideElapsed = 0;
+  private slideDirectionX = 0;
+  private slideDirectionZ = 0;
+  private slideCooldown = 0;
+  private slideHeldConsumed = false;
+  private slideRequestBuffered = false;
+  private eyeOffset: number = MOVEMENT.EYE_OFFSET;
+  private slideCameraRoll = 0;
+  private cameraFov = MOVEMENT.BASE_FOV;
 
   private wallRunning = false;
   private wallRunTime = 0;
@@ -121,10 +153,18 @@ export class FirstPersonController {
   update(dt: number) {
     const input = this.input.read();
     this.wallRunCooldown = Math.max(0, this.wallRunCooldown - dt);
+    this.slideCooldown = Math.max(0, this.slideCooldown - dt);
     this.dashCharge = Math.min(
       1,
       this.dashCharge + dt / MOVEMENT.DASH_RECHARGE_TIME,
     );
+
+    if (!input.slide) {
+      this.slideHeldConsumed = false;
+      this.slideRequestBuffered = false;
+    } else if (input.slidePressed) {
+      this.slideRequestBuffered = true;
+    }
 
     const sin = Math.sin(this.yaw);
     const cos = Math.cos(this.yaw);
@@ -147,11 +187,45 @@ export class FirstPersonController {
     }
 
     const position = this.body.translation();
+    const wasGrounded = this.grounded;
+    let slideJumpTriggered = false;
 
     if (this.grounded) {
       this.detachWallRun();
-      this.applyGroundMovement(wishX, wishZ, input.jumpPressed, dt);
+
+      if (input.jumpPressed) {
+        if (this.sliding) {
+          this.endSlide(true);
+          this.velX += this.slideDirectionX * MOVEMENT.SLIDE_HOP_BOOST;
+          this.velZ += this.slideDirectionZ * MOVEMENT.SLIDE_HOP_BOOST;
+          this.vy = MOVEMENT.JUMP_VELOCITY;
+          slideJumpTriggered = true;
+        }
+      }
+
+      if (!input.slide && this.sliding) {
+        this.endSlide(false);
+      }
+
+      if (
+        !input.jumpPressed
+        && this.slideRequestBuffered
+        && !this.sliding
+        && !this.slideHeldConsumed
+        && this.slideCooldown <= 0
+        && Math.hypot(this.velX, this.velZ) >= MOVEMENT.SLIDE_MIN_SPEED
+      ) {
+        const direction = this.getSlideEntryDirection(wishX, wishZ, cameraForward);
+        this.startSlide(direction.x, direction.z, 0);
+      }
+
+      if (this.sliding) {
+        this.applySlideMovement(strafe, dt);
+      } else if (!slideJumpTriggered) {
+        this.applyGroundMovement(wishX, wishZ, input.jumpPressed, dt);
+      }
     } else {
+      if (this.sliding) this.endSlide(true);
       this.applyAirMovement(wishX, wishZ, dt);
 
       if (this.wallRunning) {
@@ -167,6 +241,7 @@ export class FirstPersonController {
       const dashX = hasDirection ? wishX : cameraForward.x;
       const dashZ = hasDirection ? wishZ : cameraForward.z;
 
+      this.endSlide(false);
       if (this.grounded) {
         this.applyGroundDash(dashX, dashZ);
       } else {
@@ -175,6 +250,7 @@ export class FirstPersonController {
       this.dashCharge = 0;
     }
 
+    const fallSpeedBeforeLanding = !wasGrounded ? Math.max(0, -this.vy) : 0;
     const movement = {
       x: this.velX * dt,
       y: this.vy * dt,
@@ -192,6 +268,18 @@ export class FirstPersonController {
       this.vy = corrected.y / dt;
     }
 
+    const justLanded = !wasGrounded && this.grounded;
+    if (
+      justLanded
+      && input.slide
+      && !input.jumpPressed
+      && !this.sliding
+      && !this.slideHeldConsumed
+    ) {
+      const direction = this.getSlideEntryDirection(wishX, wishZ, cameraForward);
+      this.startSlide(direction.x, direction.z, fallSpeedBeforeLanding);
+    }
+
     // Keep the movement velocity independent from Rapier's collision
     // correction. The corrected translation controls the player's position,
     // but copying it back into velocity can erase momentum when the capsule
@@ -202,12 +290,11 @@ export class FirstPersonController {
       z: position.z + corrected.z,
     });
 
-    // The camera should lean away from the attached wall rather than toward
-    // it. wallSideSign is positive for a wall on the player's right.
-    const rollTarget = this.wallRunning ? -this.wallSideSign * WALL_RUN.ROLL : 0;
-    const rollBlend = 1 - Math.exp(-WALL_RUN.ROLL_RESPONSE * dt);
-    this.cameraRoll += (rollTarget - this.cameraRoll) * rollBlend;
+    const wallRollTarget = this.wallRunning ? -this.wallSideSign * WALL_RUN.ROLL : 0;
+    const wallRollBlend = 1 - Math.exp(-WALL_RUN.ROLL_RESPONSE * dt);
+    this.cameraRoll += (wallRollTarget - this.cameraRoll) * wallRollBlend;
 
+    this.updateCameraEffects(dt, right);
     this.syncCamera(position.x + corrected.x, position.y + corrected.y, position.z + corrected.z);
   }
 
@@ -241,6 +328,133 @@ export class FirstPersonController {
     } else {
       this.vy = -MOVEMENT.GROUND_STICK;
     }
+  }
+
+  private getSlideEntryDirection(
+    wishX: number,
+    wishZ: number,
+    cameraForward: BABYLON.Vector3,
+  ): BABYLON.Vector3 {
+    const speed = Math.hypot(this.velX, this.velZ);
+    if (speed > 1) {
+      return new BABYLON.Vector3(this.velX / speed, 0, this.velZ / speed);
+    }
+
+    if (wishX !== 0 || wishZ !== 0) {
+      return new BABYLON.Vector3(wishX, 0, wishZ);
+    }
+
+    return cameraForward.clone();
+  }
+
+  private startSlide(directionX: number, directionZ: number, fallSpeed: number) {
+    const directionLength = Math.hypot(directionX, directionZ);
+    if (directionLength < 0.001) return;
+
+    this.slideDirectionX = directionX / directionLength;
+    this.slideDirectionZ = directionZ / directionLength;
+    this.sliding = true;
+    this.slideElapsed = 0;
+    this.slideCooldown = MOVEMENT.SLIDE_COOLDOWN;
+    this.slideHeldConsumed = true;
+    this.slideRequestBuffered = false;
+
+    const fallBoost = Math.min(
+      fallSpeed * MOVEMENT.SLIDE_FALL_CONVERSION,
+      MOVEMENT.SLIDE_FALL_CONVERSION_MAX,
+    );
+    const impulse = MOVEMENT.SLIDE_IMPULSE + fallBoost;
+    this.velX += this.slideDirectionX * impulse;
+    this.velZ += this.slideDirectionZ * impulse;
+
+    const speed = Math.hypot(this.velX, this.velZ);
+    if (speed > MOVEMENT.SLIDE_MAX_SPEED) {
+      const scale = MOVEMENT.SLIDE_MAX_SPEED / speed;
+      this.velX *= scale;
+      this.velZ *= scale;
+    }
+  }
+
+  private endSlide(allowLandingBuffer: boolean) {
+    if (!this.sliding) return;
+
+    this.sliding = false;
+    if (allowLandingBuffer) {
+      this.slideHeldConsumed = false;
+    }
+  }
+
+  private applySlideMovement(strafe: number, dt: number) {
+    this.slideElapsed += dt;
+
+    const groundNormal = this.getGroundNormal();
+    const slopeAmount = Math.max(0, Math.min(1, (1 - groundNormal.y) / 0.7));
+    const speedCap = MOVEMENT.SLIDE_MAX_SPEED
+      + (MOVEMENT.SLIDE_SLOPE_MAX_SPEED - MOVEMENT.SLIDE_MAX_SPEED) * slopeAmount;
+
+    // Project gravity onto the ground plane. On flat ground this is zero;
+    // on a slope it produces a downhill acceleration vector.
+    const gravity = new BABYLON.Vector3(0, -MOVEMENT.GRAVITY * MOVEMENT.SLIDE_SLOPE_ACCEL, 0);
+    const gravityNormalComponent = BABYLON.Vector3.Dot(gravity, groundNormal);
+    const slopeAcceleration = gravity.subtract(groundNormal.scale(gravityNormalComponent));
+    this.velX += slopeAcceleration.x * dt;
+    this.velZ += slopeAcceleration.z * dt;
+
+    const rampProgress = Math.max(0, Math.min(
+      1,
+      (this.slideElapsed - 0.4) / MOVEMENT.SLIDE_FRICTION_RAMP,
+    ));
+    const smoothRamp = rampProgress * rampProgress * (3 - 2 * rampProgress);
+    const friction = MOVEMENT.SLIDE_LOW_FRICTION
+      + (MOVEMENT.SLIDE_HIGH_FRICTION - MOVEMENT.SLIDE_LOW_FRICTION) * smoothRamp;
+
+    const speed = Math.hypot(this.velX, this.velZ);
+    if (speed > 0.001) {
+      const drop = speed * friction * dt;
+      const scale = Math.max(0, speed - drop) / speed;
+      this.velX *= scale;
+      this.velZ *= scale;
+    }
+
+    // The main slide direction remains locked. Only a small lateral carve is
+    // allowed, perpendicular to that direction.
+    if (strafe !== 0) {
+      const carveX = this.slideDirectionZ * strafe;
+      const carveZ = -this.slideDirectionX * strafe;
+      this.velX += carveX * MOVEMENT.SLIDE_CARVE_ACCEL * dt;
+      this.velZ += carveZ * MOVEMENT.SLIDE_CARVE_ACCEL * dt;
+    }
+
+    const finalSpeed = Math.hypot(this.velX, this.velZ);
+    if (finalSpeed > speedCap) {
+      const scale = speedCap / finalSpeed;
+      this.velX *= scale;
+      this.velZ *= scale;
+    }
+
+    if (Math.hypot(this.velX, this.velZ) < MOVEMENT.SLIDE_STOP_SPEED) {
+      this.endSlide(false);
+    }
+  }
+
+  private getGroundNormal(): BABYLON.Vector3 {
+    const position = this.body.translation();
+    const ray = new RAPIER.Ray(
+      { x: position.x, y: position.y + 0.15, z: position.z },
+      { x: 0, y: -1, z: 0 },
+    );
+    const hit = this.world.castRayAndGetNormal(
+      ray,
+      1.25,
+      true,
+      undefined,
+      undefined,
+      this.collider,
+      this.body,
+    );
+
+    if (!hit || hit.normal.y < 0.2) return BABYLON.Axis.Y;
+    return new BABYLON.Vector3(hit.normal.x, hit.normal.y, hit.normal.z).normalize();
   }
 
   private applyGroundDash(directionX: number, directionZ: number) {
@@ -404,14 +618,39 @@ export class FirstPersonController {
     this.wallEntryRising = false;
   }
 
+  private updateCameraEffects(dt: number, right: BABYLON.Vector3) {
+    const targetEyeOffset = this.sliding ? MOVEMENT.SLIDE_EYE_OFFSET : MOVEMENT.EYE_OFFSET;
+    const heightBlend = 1 - Math.exp(-MOVEMENT.CAMERA_HEIGHT_RESPONSE * dt);
+    this.eyeOffset += (targetEyeOffset - this.eyeOffset) * heightBlend;
+
+    const speed = Math.hypot(this.velX, this.velZ);
+    const fovProgress = Math.max(0, Math.min(
+      1,
+      (speed - MOVEMENT.FOV_SPEED_START) / (MOVEMENT.FOV_SPEED_MAX - MOVEMENT.FOV_SPEED_START),
+    ));
+    const targetFov = MOVEMENT.BASE_FOV + MOVEMENT.MAX_FOV_WIDEN * fovProgress;
+    const fovBlend = 1 - Math.exp(-MOVEMENT.CAMERA_FOV_RESPONSE * dt);
+    this.cameraFov += (targetFov - this.cameraFov) * fovBlend;
+    this.camera.fov = this.cameraFov;
+
+    const lateralSpeed = speed > 0.001
+      ? BABYLON.Vector3.Dot(new BABYLON.Vector3(this.velX, 0, this.velZ), right) / speed
+      : 0;
+    const targetSlideRoll = this.sliding
+      ? Math.max(-1, Math.min(1, lateralSpeed)) * MOVEMENT.CAMERA_SLIDE_ROLL
+      : 0;
+    const rollBlend = 1 - Math.exp(-MOVEMENT.CAMERA_FOV_RESPONSE * dt);
+    this.slideCameraRoll += (targetSlideRoll - this.slideCameraRoll) * rollBlend;
+  }
+
   private applyCameraRotation() {
     this.camera.rotationQuaternion = null;
-    this.camera.rotation.set(this.pitch, this.yaw, this.cameraRoll);
+    this.camera.rotation.set(this.pitch, this.yaw, this.cameraRoll + this.slideCameraRoll);
   }
 
   /** Write the final camera transform immediately before rendering. */
   syncCamera(x: number, y: number, z: number) {
-    this.camera.position.set(x, y + MOVEMENT.EYE_OFFSET, z);
+    this.camera.position.set(x, y + this.eyeOffset, z);
     this.applyCameraRotation();
   }
 
