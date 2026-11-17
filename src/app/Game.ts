@@ -4,6 +4,7 @@ import { InputManager } from '../input/InputManager';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { FirstPersonController } from '../world/FirstPersonController';
 import { createFirstLevel, type FirstLevelWorld } from '../world/maps/firstLevel';
+import { loadLevel } from '../world/maps/loadLevel';
 import { IntroCinematic } from '../cinematic/IntroCinematic';
 import { KatanaViewmodel } from '../world/KatanaViewmodel';
 import { Grappler } from '../world/Grappler';
@@ -34,7 +35,9 @@ export class Game {
   /** The guards that are shooting at the player. */
   private enemies: PistolEnemy[] = [];
   /** The opening shot, which owns the camera until it hands back control. */
-  private cinematic!: IntroCinematic;
+  private cinematic?: IntroCinematic;
+  /** Set when a ?level= JSON level is loaded instead of the first level. */
+  private customLevel = false;
   /** True after falling out of the level, until R restarts. */
   private fatal = false;
 
@@ -99,7 +102,21 @@ export class Game {
     this.camera.upVector.set(0, 1, 0);
     this.scene.activeCamera = this.camera;
 
-    this.world = createFirstLevel(this.scene, this.rapierWorld, shadowGenerator);
+    // ?level=name loads a JSON-built level; otherwise the hand-authored
+    // first level is used. JSON levels skip the scripted intro and drop the
+    // player straight into gameplay at gameplaySpawn.
+    const levelName = new URLSearchParams(window.location.search).get('level');
+    if (levelName) {
+      const response = await fetch(`/src/world/levels/${levelName}.json`);
+      if (!response.ok) {
+        throw new Error(`Level not found: /src/world/levels/${levelName}.json`);
+      }
+      const data = await response.json();
+      this.world = loadLevel(data, this.scene, this.rapierWorld, shadowGenerator);
+      this.customLevel = true;
+    } else {
+      this.world = createFirstLevel(this.scene, this.rapierWorld, shadowGenerator);
+    }
 
     this.input = new InputManager(this.canvas);
     this.controller = new FirstPersonController(
@@ -108,6 +125,13 @@ export class Game {
       this.input,
       this.world.spawn,
     );
+
+    // JSON levels start gameplay immediately at the gameplay spawn; there is
+    // no scripted intro cinematic for them.
+    if (this.customLevel) {
+      this.controller.setSpawn(this.world.gameplaySpawn);
+      this.controller.setPose(this.world.gameplaySpawn, 0, 0);
+    }
 
     this.hud = new HUD(document.getElementById('hud')!);
 
@@ -233,24 +257,26 @@ export class Game {
     this.canvas.addEventListener('click', () => this.audio.unlock());
 
     // The opening shot takes the camera, the input and the blade until it is
-    // done. enemies[0] is the guard standing in the courtyard below the beam.
-    this.cinematic = new IntroCinematic({
-      camera: this.camera,
-      controller: this.controller,
-      katana: this.katana,
-      hud: this.hud,
-      input: this.input,
-      audio: this.audio,
-      combat: this.combat,
-      victim: this.enemies[0],
-      enemies: this.enemies,
-      gameplaySpawn: this.world.gameplaySpawn,
-      onFinish: () => {
-        this.pendingReset = false;
-        this.hitStopTimer = 0;
-      },
-    });
-    this.input.onSkipPressed = () => this.cinematic.skip();
+    // done. JSON levels skip it and start gameplay immediately.
+    if (!this.customLevel) {
+      this.cinematic = new IntroCinematic({
+        camera: this.camera,
+        controller: this.controller,
+        katana: this.katana,
+        hud: this.hud,
+        input: this.input,
+        audio: this.audio,
+        combat: this.combat,
+        victim: this.enemies[0],
+        enemies: this.enemies,
+        gameplaySpawn: this.world.gameplaySpawn,
+        onFinish: () => {
+          this.pendingReset = false;
+          this.hitStopTimer = 0;
+        },
+      });
+      this.input.onSkipPressed = () => this.cinematic!.skip();
+    }
 
     (window as unknown as Record<string, unknown>).__velocity = {
       BABYLON,
@@ -271,7 +297,7 @@ export class Game {
 
     // The game starts with the opening shot; the ordinary render loop takes
     // over the moment it finishes.
-    this.cinematic.start();
+    this.cinematic?.start();
 
     this.engine.runRenderLoop(() => {
       const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
@@ -282,7 +308,7 @@ export class Game {
       // --- The opening shot -----------------------------------------------
       // The cinematic owns the camera, the blade and the input. The player is
       // not simulated at all, so nothing can fight the scripted camera.
-      if (this.cinematic.active) {
+      if (this.cinematic?.active) {
         this.cinematic.update(dt);
         for (const enemy of this.enemies) {
           enemy.update(dt, 1, this.camera.position);
@@ -397,7 +423,7 @@ export class Game {
    */
   private resolveSwing() {
     // Never resolve player swings during the intro cinematic.
-    if (this.cinematic.active) return;
+    if (this.cinematic?.active) return;
 
     const target = this.combat.findTarget(
       this.camera.position,
@@ -486,7 +512,7 @@ export class Game {
    * again. If R is pressed during the intro the whole shot plays again.
    */
   private resetRun() {
-    const replayIntro = this.cinematic.active;
+    const replayIntro = this.cinematic?.active ?? false;
 
     this.combat.respawnAll();
     this.projectiles.clear();
@@ -503,7 +529,7 @@ export class Game {
     this.katana.setBladeEnabled(true);
 
     if (replayIntro) {
-      this.cinematic.start();
+      this.cinematic?.start();
     } else {
       // Restart at the courtyard where control was handed over, not back up
       // on the rooftop beam.
