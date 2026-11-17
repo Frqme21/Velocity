@@ -113,16 +113,42 @@ the blade is turned to follow the cut, so the light always comes out of the tip.
 the swing ends the blade reappears where the slash finished and eases back into its
 resting pose over `0.12 s`.
 
-**The hit.** On the impact frame (halfway through the swing) the game runs a forward
-cone check: `3.4 m` range and a `75°` full-width cone around the crosshair, widened by
-the target's own radius. A hit produces `35 ms` of hit-stop (the world freezes while
-the viewmodel keeps moving), plays the katana slash sound, and **instantly refills the
-dash meter**, so kills chain straight into the next rooftop traversal.
+**The hit.** The blade is lethal from `0.04 s` to `0.16 s` into the swing: a guard within
+`3.5 m` and inside a `dot > 0.45` forward cone is cut. A kill produces `60 ms` of
+**whole-world hit-stop** — controller, physics, bolts, guards and blade all hold still —
+plus a white flash, FOV punch, camera shake, sparks and a crescent slice arc. The dash
+meter refills to `100%`, so kills chain straight into the next traversal.
 
-The target registry is intentionally decoupled from any enemy implementation:
-`KatanaCombat` keeps a list of registered targets and asks each one to slice itself.
-Future enemies plug into it by registering a target with a position, a radius and an
-`onSlice` callback.
+### The dash-slash lunge
+
+A slash aimed at a guard up to `8 m` away yanks the player in. The pull runs at
+`34 m/s` so it closes the gap inside the blade's hit window, and the player's heading is
+bent toward the target throughout. A dash keeps its speed but is steered into the guard;
+the final step is clamped so the player lands at blade range instead of sailing through
+the target. A standing pull gives back the speed the lunge added, so it stops beside the
+guard too.
+
+### Guards
+
+Four pistol guards stand on the platforms and cranes. They use the skinned
+`enemy_pistol.glb` model with a proxy fallback, face the player smoothly within `32 m`
+when they have line of sight, telegraph for `0.85 s` with a red beam, then fire an
+orange-red bolt at `26 m/s`. The line-of-sight cast ignores the player's own capsule.
+Guards respawn instantly on reset.
+
+### Parry and projectiles
+
+The first `0.18 s` of every swing is a parry window: an incoming bolt within `3.2 m` and
+a `dot > 0.35` forward cone is deflected back along the crosshair at `1.75×` its speed,
+turns cyan, and produces a spark burst, clang and a small hit-stop. Deflected bolts kill
+a guard within `0.85 m`. Bolts raycast against the world from their previous position, so
+they stop at walls. An un-deflected hit resets the run.
+
+### Instant reset
+
+`R`, an un-deflected bolt, or falling below the kill plane drops the player straight back
+at spawn, clears every bolt, and respawns all guards in the same frame — no loading and
+no menu.
 
 ## Project structure
 
@@ -142,15 +168,23 @@ src/
   physics/
     PhysicsWorld.ts         Rapier world bootstrap
   ui/
-    HUD.ts                  crosshair, dash meter, speed readout, speed lines
+    HUD.ts                  crosshair, dash meter, speed readout, damage/hit flashes
+  combat/
+    CombatSystem.ts         melee + deflect kills, sparks, slice arcs, hit feedback
+    ProjectileManager.ts    bolts, parry redirection, wall hits, player hits
+    SliceArc.ts             bright crescent kill arc
+    SparkBurst.ts           shared kill/parry spark system
+  entities/
+    PistolEnemy.ts          skinned guard, LOS, telegraph, fire, ragdoll, respawn
   world/
-    FirstPersonController.ts  player movement, dash, slide, wall run, mantle, grapple
+    FirstPersonController.ts  movement, dash, slide, wall run, mantle, grapple, lunge
     Grappler.ts             targeting, ring visuals, cooldown
-    KatanaViewmodel.ts      first-person katana, swing animation, slash visuals
-    KatanaCombat.ts         melee target registry + cone check
+    KatanaViewmodel.ts      first-person katana, swing animation, laser slash
     SlashTrail.ts           procedural laser-slash ribbon + additive shader
-    maps/graybox.ts         the level and its grapple anchors
+    maps/graybox.ts         the level, grapple anchors and enemy spawns
 ```
+
+Model and sound assets live in `public/models/` and `public/sounds/`.
 
 The player is a **kinematic** Rapier capsule. The controller integrates velocity itself
 (`velX` / `velZ` / `vy`) and moves the body with `setNextKinematicTranslation`; Rapier's
@@ -167,8 +201,9 @@ scattered through the code:
   slide, mantle, camera response.
 - `src/config/grapple.ts` — targeting cone/range/LOS, pull speed and response, detach
   distance, vault forces, jump/dash boosts, FOV kick, roll and shake.
-- `src/config/combat.ts` — swing timing, hit cone and range, hit-stop, dash refill,
-  slash trail width, colours and fade.
+- `src/config/combat.ts` — swing timing, melee and lunge cones/ranges, parry window and
+  redirect speed, projectile behaviour, hit-stop, dash refill, slash trail, sparks and
+  slice feedback.
 
 All three are plain `as const` objects, so tweaking a value and reloading is enough.
 
