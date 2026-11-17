@@ -96,6 +96,14 @@ export class PistolEnemy {
   /** Fired when the enemy pulls the trigger. */
   public onFire?: (position: BABYLON.Vector3) => void;
 
+  /**
+   * False while the intro cinematic owns the screen.
+   *
+   * The death animation still plays, but the guard does not aim or fire at a
+   * player who is busy watching the opening shot.
+   */
+  public aiEnabled = true;
+
   constructor(
     scene: BABYLON.Scene,
     world: RAPIER.World,
@@ -305,7 +313,7 @@ export class PistolEnemy {
       this.updateDeath(dt);
       return;
     }
-    if (!this.alive) return;
+    if (!this.alive || !this.aiEnabled) return;
 
     // The enemy's own clock runs with the world, so the sensory boost
     // stretches out the aiming laser as well.

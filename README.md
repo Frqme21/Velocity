@@ -207,6 +207,45 @@ scattered through the code:
 
 All three are plain `as const` objects, so tweaking a value and reloading is enough.
 
+## First level — the traversal course
+
+The sandbox now ships with a complete linear first level:
+
+1. **Rooftop intro** — the player spawns on a beam at y=18. A short cinematic plays:
+   walk to the edge, look down at the guard in the courtyard, draw and inspect the katana,
+   drop and execute a mid-air kill. Press `Space` or `Enter` to skip the intro at any time;
+   press `R` to replay it.
+2. **Courtyard** — the intro guard is dead; movement gameplay begins here.
+3. **Mantle ledge** — a 1.4 m step marked with climb chevrons.
+4. **Drop** — fall back to ground level, hazard stripes mark the re-acquire point.
+5. **Wall-run pit** — no floor; a tall pillar on the left is the only wall-runnable
+   surface in the level (tagged via `wallRunColliders`). Chevrons point along the run
+   direction (+z). A grapple ring hangs overhead for the alternative line.
+6. **Pit landing** — solid deck to recover on.
+7. **Grapple gap** — no floor; fire the hook to cross.
+8. **Final platform** — deck with a sliding gate and a second guard.
+
+The map is built from strictly separated z-slabs; `layoutOverlaps` is empty by
+construction and exposed on the world object for verification. No two pieces share
+the same space, and the wall-run is whitelisted to its one dedicated surface so the
+camera never tilts by accident.
+
+**Fatal error state** — falling below `y = -6` freezes the world and shows a
+"FATAL ERROR – press R to restart" overlay instead of silently teleporting. `R`
+resets the run instantly: the intro replays if you died during it, otherwise you
+respawn at the courtyard handover point.
+
+## Texture generation
+
+All in-world textures are generated from code. To regenerate:
+
+```bash
+python3 tools/generate_textures.py
+```
+
+Outputs are written to `public/textures/`. The new `climb_chevrons_forward.png`
+is the wall-run variant with arrows pointing along the run direction.
+
 ## Development
 
 ```bash

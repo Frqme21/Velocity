@@ -3,7 +3,8 @@ import * as RAPIER from '@dimforge/rapier3d-compat';
 import { InputManager } from '../input/InputManager';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { FirstPersonController } from '../world/FirstPersonController';
-import { createAssetViewer, type AssetViewerWorld } from '../world/maps/assetViewer';
+import { createFirstLevel, type FirstLevelWorld } from '../world/maps/firstLevel';
+import { IntroCinematic } from '../cinematic/IntroCinematic';
 import { KatanaViewmodel } from '../world/KatanaViewmodel';
 import { Grappler } from '../world/Grappler';
 import { HUD } from '../ui/HUD';
@@ -26,12 +27,16 @@ export class Game {
   private hud!: HUD;
   private audio!: AudioManager;
   private physics!: PhysicsWorld;
-  /** The current world: the flat asset showroom during asset approval. */
-  private world!: AssetViewerWorld;
+  /** The current level: the linear first-stage traversal course. */
+  private world!: FirstLevelWorld;
   private rapierWorld!: RAPIER.World;
   private projectiles!: ProjectileManager;
   /** The guards that are shooting at the player. */
   private enemies: PistolEnemy[] = [];
+  /** The opening shot, which owns the camera until it hands back control. */
+  private cinematic!: IntroCinematic;
+  /** True after falling out of the level, until R restarts. */
+  private fatal = false;
 
   /** Time left of the hit-stop micro freeze, in seconds. */
   private hitStopTimer = 0;
@@ -94,7 +99,7 @@ export class Game {
     this.camera.upVector.set(0, 1, 0);
     this.scene.activeCamera = this.camera;
 
-    this.world = createAssetViewer(this.scene, this.rapierWorld, shadowGenerator);
+    this.world = createFirstLevel(this.scene, this.rapierWorld, shadowGenerator);
 
     this.input = new InputManager(this.canvas);
     this.controller = new FirstPersonController(
@@ -227,6 +232,26 @@ export class Game {
     // The browser needs a gesture before the audio context may run.
     this.canvas.addEventListener('click', () => this.audio.unlock());
 
+    // The opening shot takes the camera, the input and the blade until it is
+    // done. enemies[0] is the guard standing in the courtyard below the beam.
+    this.cinematic = new IntroCinematic({
+      camera: this.camera,
+      controller: this.controller,
+      katana: this.katana,
+      hud: this.hud,
+      input: this.input,
+      audio: this.audio,
+      combat: this.combat,
+      victim: this.enemies[0],
+      enemies: this.enemies,
+      gameplaySpawn: this.world.gameplaySpawn,
+      onFinish: () => {
+        this.pendingReset = false;
+        this.hitStopTimer = 0;
+      },
+    });
+    this.input.onSkipPressed = () => this.cinematic.skip();
+
     (window as unknown as Record<string, unknown>).__velocity = {
       BABYLON,
       scene: this.scene,
@@ -239,13 +264,59 @@ export class Game {
       audio: this.audio,
       projectiles: this.projectiles,
       enemies: this.enemies,
+      cinematic: this.cinematic,
+      world: this.world,
+      hud: this.hud,
     };
+
+    // The game starts with the opening shot; the ordinary render loop takes
+    // over the moment it finishes.
+    this.cinematic.start();
 
     this.engine.runRenderLoop(() => {
       const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
 
-      // The showroom props keep moving even during hit-stop.
+      // Level props keep moving through hit-stop and through the intro.
       this.world.update(dt);
+
+      // --- The opening shot -----------------------------------------------
+      // The cinematic owns the camera, the blade and the input. The player is
+      // not simulated at all, so nothing can fight the scripted camera.
+      if (this.cinematic.active) {
+        this.cinematic.update(dt);
+        for (const enemy of this.enemies) {
+          enemy.update(dt, 1, this.camera.position);
+        }
+        this.combat.update(dt);
+        this.katana.update(dt, {
+          speed: 0,
+          grounded: false,
+          dashing: false,
+          sliding: false,
+          wallRunning: false,
+          sensoryBoosting: false,
+        });
+        this.hud.update({
+          speed: 0,
+          fps: this.engine.getFps(),
+          dashCharge: 1,
+          meter: 1,
+          speedEffect: 0,
+          dashing: false,
+          sliding: false,
+          sensoryBoost: false,
+        });
+        this.scene.render();
+        return;
+      }
+
+      // --- Fatal error: frozen until R ------------------------------------
+      if (this.fatal) {
+        this.input.read();
+        this.combat.update(dt);
+        this.scene.render();
+        return;
+      }
 
       // Hit-stop: the whole world freezes for a few milliseconds when the
       // blade connects. Everything that moves is held still - the player,
@@ -279,9 +350,9 @@ export class Game {
       }
       this.combat.update(dt);
 
-      // Falling into the trench resets the run.
-      if (playerPosition.y < COMBAT_CONFIG.KILL_PLANE_Y) {
-        this.pendingReset = true;
+      // Falling out of the level is a fatal error, not a silent teleport.
+      if (playerPosition.y < this.world.killY) {
+        this.enterFatal();
       }
 
       // The reset happens at the very end of the frame, so the whole frame
@@ -325,6 +396,9 @@ export class Game {
    * chained straight into a dash.
    */
   private resolveSwing() {
+    // Never resolve player swings during the intro cinematic.
+    if (this.cinematic.active) return;
+
     const target = this.combat.findTarget(
       this.camera.position,
       this.camera.getForwardRay().direction,
@@ -391,17 +465,50 @@ export class Game {
   }
 
   /**
+   * Freeze the run on a fatal-error screen after a fall.
+   *
+   * The world keeps rendering but nothing moves until R. The message stays up
+   * so the player can read what went wrong instead of being teleported
+   * without an explanation.
+   */
+  private enterFatal() {
+    if (this.fatal) return;
+    this.fatal = true;
+    this.input.enabled = false;
+    this.hud.showFatalError();
+  }
+
+  /**
    * Put the run back to the start.
    *
-   * No loading screen, no menu: the player is back at the spawn point in
-   * the same frame, every bolt in the air is gone and every guard is
-   * standing again.
+   * No loading screen, no menu: the player is back in the courtyard in the
+   * same frame, every bolt in the air is gone and every guard is standing
+   * again. If R is pressed during the intro the whole shot plays again.
    */
   private resetRun() {
-    this.controller.respawn();
-    this.projectiles.clear();
+    const replayIntro = this.cinematic.active;
+
     this.combat.respawnAll();
+    this.projectiles.clear();
+    this.controller.setSpawn(this.world.spawn);
+    this.controller.setPose(this.world.spawn, 0, 0);
+
     this.hitStopTimer = 0;
     this.pendingReset = false;
+    this.fatal = false;
+    this.hud.hideFatalError();
+    this.input.enabled = true;
+
+    this.katana.cinematicPose = null;
+    this.katana.setBladeEnabled(true);
+
+    if (replayIntro) {
+      this.cinematic.start();
+    } else {
+      // Restart at the courtyard where control was handed over, not back up
+      // on the rooftop beam.
+      this.controller.setSpawn(this.world.gameplaySpawn);
+      this.controller.setPose(this.world.gameplaySpawn, 0, 0);
+    }
   }
 }

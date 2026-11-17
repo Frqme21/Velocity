@@ -84,8 +84,21 @@ const WALL_RUN = {
   JUMP_NORMAL_IMPULSE: 7.5,
   JUMP_TANGENT_IMPULSE: 9.5,
   JUMP_VERTICAL_IMPULSE: 8.2,
-  ROLL: 0.21,
+  ROLL: 0.14,
   ROLL_RESPONSE: 12,
+  /**
+   * How long the player has to be off the ground before a wall can be used.
+   *
+   * Without this a single dropped ground contact - a lip, a seam, a body
+   * squeezed against a wall - was enough to start a wall run while the
+   * player was still standing on the floor.
+   */
+  MIN_AIR_TIME: 0.09,
+  /**
+   * How far the feet have to be above the ground below before a wall run may
+   * start. This keeps the trick off the floor and off low kerbs and rails.
+   */
+  MIN_GROUND_CLEARANCE: 0.5,
 } as const;
 
 const LUNGE = {
@@ -164,6 +177,8 @@ export class FirstPersonController {
   private wallRunning = false;
   private wallRunTime = 0;
   private wallRunCooldown = 0;
+  /** How long the player has been off the ground, in seconds. */
+  private airTime = 0;
   private wallNormal = BABYLON.Vector3.Zero();
   private wallTangent = BABYLON.Vector3.Zero();
   private wallColliderHandle = -1;
@@ -526,6 +541,11 @@ export class FirstPersonController {
     }
 
     const scaledDt = dt * this.timeScale;
+    // How long the player has been off the ground. A wall run needs a real
+    // moment in the air, so a single dropped ground contact - a lip, a seam,
+    // a body squeezed against a wall - cannot start one.
+    if (this.grounded) this.airTime = 0;
+    else this.airTime += dt;
     this.wallRunCooldown = Math.max(0, this.wallRunCooldown - scaledDt);
     this.slideCooldown = Math.max(0, this.slideCooldown - scaledDt);
     this.dashTimeRemaining = Math.max(0, this.dashTimeRemaining - scaledDt);
@@ -1321,6 +1341,12 @@ export class FirstPersonController {
     cameraForward: BABYLON.Vector3,
     right: BABYLON.Vector3,
   ): WallHit | null {
+    // A wall run is an aerial move. It needs the player to be properly in the
+    // air and to have cleared the floor below, so it can never start while
+    // running along the ground or alongside a kerb.
+    if (this.airTime < WALL_RUN.MIN_AIR_TIME) return null;
+    if (this.isTooCloseToGround(position)) return null;
+
     const origin = { x: position.x, y: position.y, z: position.z };
     const candidates: WallHit[] = [];
 
@@ -1376,6 +1402,33 @@ export class FirstPersonController {
     return candidates.reduce((closest, candidate) =>
       candidate.distance < closest.distance ? candidate : closest,
     );
+  }
+
+  /**
+   * True when the floor is close enough under the feet that this is floor
+   * movement, not an aerial trick.
+   *
+   * The ray starts at the body centre and reaches a little below the feet.
+   * If it finds a surface, the player is skimming the ground and a wall run
+   * would look like running along the floor with a tilted camera.
+   */
+  private isTooCloseToGround(position: { x: number; y: number; z: number }): boolean {
+    const ray = new RAPIER.Ray(
+      { x: position.x, y: position.y, z: position.z },
+      { x: 0, y: -1, z: 0 },
+    );
+    const hit = this.world.castRayAndGetNormal(
+      ray,
+      MOVEMENT.PLAYER_HEIGHT / 2 + WALL_RUN.MIN_GROUND_CLEARANCE,
+      true,
+      undefined,
+      undefined,
+      this.collider,
+      this.body,
+    );
+    if (!hit) return false;
+    // Only a floor counts. A wall or a ledge under the player is not ground.
+    return hit.normal.y > 0.5;
   }
 
   private attachWallRun(hit: WallHit, enteredWhileRising: boolean) {
@@ -1728,6 +1781,7 @@ export class FirstPersonController {
     this.dashTimeRemaining = 0;
     this.lungeTimer = 0;
     this.wallRunTime = 0;
+    this.airTime = 0;
     this.jumpGraceTimer = 0;
 
     // No momentum, no boost, full meter.
@@ -1747,8 +1801,73 @@ export class FirstPersonController {
     this.grounded = false;
   }
 
+  /**
+   * Move the respawn point.
+   *
+   * The intro starts on the rooftop beam, but once the cinematic hands over
+   * control a death should bring the player back to the courtyard, not make
+   * them watch the whole intro again.
+   */
+  setSpawn(point: BABYLON.Vector3) {
+    this.spawnPoint.copyFrom(point);
+  }
+
+  /** Teleport to an exact body position and look direction without a reset. */
+  setPose(position: BABYLON.Vector3, yaw = 0, pitch = 0) {
+    if (this.grappleTarget) this.endGrapplePull('cancelled', false);
+    this.detachWallRun();
+    this.endSlide(false);
+    this.cancelSensoryBoost();
+    this.mantle.active = false;
+
+    this.velX = 0;
+    this.velZ = 0;
+    this.vy = 0;
+    this.timeScale = 1;
+    this.dashCharge = 1;
+    this.parryFov = 0;
+    this.parryShake = 0;
+    this.sensoryDashTime = 0;
+    this.dashTimeRemaining = 0;
+    this.lungeTimer = 0;
+    this.wallRunTime = 0;
+    this.jumpGraceTimer = 0;
+    this.cameraRoll = 0;
+    this.slideCameraRoll = 0;
+    this.grappleRoll = 0;
+    this.eyeOffset = MOVEMENT.EYE_OFFSET;
+    this.cameraFov = MOVEMENT.BASE_FOV;
+    this.camera.fov = MOVEMENT.BASE_FOV;
+
+    this.yaw = yaw;
+    this.pitch = pitch;
+    this.grounded = false;
+    this.airTime = 0;
+    this.body.setNextKinematicTranslation(position);
+    this.body.setTranslation(position, true);
+    this.syncCamera(position.x, position.y, position.z);
+  }
+
   get isGrounded(): boolean {
     return this.grounded;
+  }
+
+  /**
+   * Prepare for cinematic handover.
+   *
+   * Clears all latched impact feedback (parryFov, parryShake) and camera
+   * roll sources that may have been set during the intro. Syncs the controller's
+   * FOV state to the cinematic's final FOV so there's no pop when gameplay
+   * resumes.
+   */
+  prepareHandover(cinematicFov: number) {
+    this.parryFov = 0;
+    this.parryShake = 0;
+    this.cameraRoll = 0;
+    this.slideCameraRoll = 0;
+    this.grappleRoll = 0;
+    this.cameraFov = cinematicFov;
+    this.camera.fov = cinematicFov;
   }
 
   get isWallRunning(): boolean {

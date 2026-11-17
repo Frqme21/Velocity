@@ -166,6 +166,15 @@ export class KatanaViewmodel {
    */
   public onSwingImpact?: () => void;
 
+  /**
+   * Scripted grip transform used by the intro cinematic.
+   *
+   * When this is set the viewmodel stops using the gameplay bob/sway pose and
+   * sits exactly where the cinematic puts it, so the blade can be drawn and
+   * turned in front of the camera. Clearing it restores normal play.
+   */
+  public cinematicPose: { position: BABYLON.Vector3; rotation: BABYLON.Vector3 } | null = null;
+
   private readonly bob = new BABYLON.Vector3();
   private readonly offset = new BABYLON.Vector3();
   private readonly basePosition = new BABYLON.Vector3();
@@ -322,6 +331,20 @@ export class KatanaViewmodel {
     return true;
   }
 
+  /**
+   * Snapshot of the normal resting grip pose.
+   *
+   * The intro builds its inspect pose as an offset from this, so it keeps
+   * working even if the model's grip anchor changes later.
+   */
+  getRestPose(): { position: BABYLON.Vector3; rotation: BABYLON.Vector3 } | null {
+    if (!this.root) return null;
+    return {
+      position: this.root.position.clone(),
+      rotation: this.root.rotation.clone(),
+    };
+  }
+
   /** True while the swing animation is running. */
   get isSwinging(): boolean {
     return this.swinging;
@@ -383,6 +406,17 @@ export class KatanaViewmodel {
     end.x *= direction;
 
     return { start, control, end };
+  }
+
+  /**
+   * Show or hide the whole katana from outside.
+   *
+   * The intro keeps the blade sheathed until the draw, then brings it back
+   * before the scripted swing so the steel dissolves into the laser normally.
+   */
+  setBladeEnabled(visible: boolean) {
+    this.setBladeVisible(visible);
+    if (visible) this.setBladeAlpha(1);
   }
 
   /** Show or hide the katana model. */
@@ -507,6 +541,14 @@ export class KatanaViewmodel {
     // The swing happens on its own node, so the resting pose below is
     // unaffected by it.
     this.updateSwing(dt);
+
+    // A cinematic pose replaces the whole gameplay pose. It is written after
+    // the swing update, so the blade still animates while the grip is held.
+    if (this.cinematicPose) {
+      root.position.copyFrom(this.cinematicPose.position);
+      root.rotation.copyFrom(this.cinematicPose.rotation);
+      return;
+    }
 
     root.position.set(
       this.basePosition.x + bob.x + this.swayX + this.stateOffset.x,

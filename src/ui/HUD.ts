@@ -17,11 +17,16 @@ export class HUD {
   private sensoryOverlayElement: HTMLElement;
   private damageFlashElement: HTMLElement;
   private hitFlashElement: HTMLElement;
+  private cinematicBlurElement: HTMLElement;
+  private cinematicBarsElement: HTMLElement;
+  private cinematicCaptionElement: HTMLElement;
+  private fatalElement: HTMLElement;
   /** The pending fade-out timers of the screen flashes. */
   private timers = new Map<'damage' | 'hit', number>();
 
   constructor(root: HTMLElement) {
     root.innerHTML = `
+      <div id="cinematic-blur" aria-hidden="true"></div>
       <div id="sensory-overlay" aria-hidden="true"></div>
       <div id="speed-lines" aria-hidden="true"></div>
       <div id="damage-flash" aria-hidden="true"></div>
@@ -37,6 +42,12 @@ export class HUD {
         <span id="speed">0.00 m/s</span>
         <span id="fps">0 FPS</span>
       </div>
+      <div id="cinematic-bars" aria-hidden="true"></div>
+      <div id="cinematic-caption" aria-live="polite"></div>
+      <div id="fatal-error" aria-live="assertive">
+        <div class="fatal-title">FATAL ERROR</div>
+        <div class="fatal-sub">PRESS <kbd>R</kbd> TO RESTART</div>
+      </div>
     `;
     this.speedElement = root.querySelector<HTMLElement>('#speed')!;
     this.fpsElement = root.querySelector<HTMLElement>('#fps')!;
@@ -45,6 +56,42 @@ export class HUD {
     this.sensoryOverlayElement = root.querySelector<HTMLElement>('#sensory-overlay')!;
     this.damageFlashElement = root.querySelector<HTMLElement>('#damage-flash')!;
     this.hitFlashElement = root.querySelector<HTMLElement>('#hit-flash')!;
+    this.cinematicBlurElement = root.querySelector<HTMLElement>('#cinematic-blur')!;
+    this.cinematicBarsElement = root.querySelector<HTMLElement>('#cinematic-bars')!;
+    this.cinematicCaptionElement = root.querySelector<HTMLElement>('#cinematic-caption')!;
+    this.fatalElement = root.querySelector<HTMLElement>('#fatal-error')!;
+  }
+
+  /** Enter or leave the scripted intro: letterbox, caption and hidden HUD. */
+  setCinematic(active: boolean) {
+    document.body.classList.toggle('cinematic', active);
+    this.cinematicBarsElement.classList.toggle('active', active);
+    if (!active) {
+      this.cinematicCaptionElement.textContent = '';
+      this.setCinematicBlur(0);
+    }
+  }
+
+  /** Blur the world behind the HUD, in CSS pixels (the intro starts at 22). */
+  setCinematicBlur(pixels: number) {
+    this.cinematicBlurElement.style.setProperty('--cinematic-blur', `${pixels.toFixed(2)}px`);
+  }
+
+  /** Set the opening cinematic's subtitle line. */
+  setCinematicCaption(text: string) {
+    this.cinematicCaptionElement.textContent = text;
+    this.cinematicCaptionElement.classList.toggle('visible', text.length > 0);
+  }
+
+  /** Show the death screen after falling out of the level. */
+  showFatalError() {
+    document.body.classList.add('fatal');
+    this.fatalElement.classList.add('active');
+  }
+
+  hideFatalError() {
+    document.body.classList.remove('fatal');
+    this.fatalElement.classList.remove('active');
   }
 
   update(state: HUDState) {

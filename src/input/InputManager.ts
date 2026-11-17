@@ -26,6 +26,25 @@ export interface InputState {
 
 type PointerLockRequest = (options?: { unadjustedMovement?: boolean }) => Promise<void> | void;
 
+/** A held-still input snapshot used while a cinematic owns the screen. */
+const ZERO_INPUT: InputState = {
+  forward: false,
+  backward: false,
+  left: false,
+  right: false,
+  leftPressed: false,
+  rightPressed: false,
+  jump: false,
+  jumpPressed: false,
+  dashHeld: false,
+  dashPressed: false,
+  slide: false,
+  slidePressed: false,
+  attackPressed: false,
+  mouseDX: 0,
+  mouseDY: 0,
+};
+
 /** Keyboard and pointer-lock mouse input for the movement sandbox. */
 export class InputManager {
   private keys = new Set<string>();
@@ -66,6 +85,21 @@ export class InputManager {
    */
   public onResetPressed?: () => void;
 
+  /**
+   * Fired when Space or Enter is pressed during a cinematic so the player can
+   * skip the intro. Like reset, it works without pointer lock.
+   */
+  public onSkipPressed?: () => void;
+
+  /**
+   * False while a cinematic or a fatal-error state owns the screen.
+   *
+   * Reset and skip are deliberately handled before this gate, so the player
+   * always has a way out. Everything else - movement, look, attack and
+   * grapple - stops reaching the controller while this is false.
+   */
+  public enabled = true;
+
   private grappleMouseDown = false;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -76,7 +110,10 @@ export class InputManager {
       if (event.code === 'KeyR' && !event.repeat) {
         this.onResetPressed?.();
       }
-      if (!this.locked) return;
+      if ((event.code === 'Space' || event.code === 'Enter') && !event.repeat) {
+        this.onSkipPressed?.();
+      }
+      if (!this.locked || !this.enabled) return;
       event.preventDefault();
       if (event.code === 'Space' && !event.repeat) this.jumpLatch = true;
       if (event.code === 'KeyA' && !event.repeat) this.leftLatch = true;
@@ -103,7 +140,7 @@ export class InputManager {
     // Right mouse fires the grapple.
     canvas.addEventListener('contextmenu', (event) => event.preventDefault());
     canvas.addEventListener('mousedown', (event) => {
-      if (!this.locked) return;
+      if (!this.locked || !this.enabled) return;
       event.preventDefault();
       if (event.button === 2) {
         this.grappleMouseDown = true;
@@ -133,7 +170,7 @@ export class InputManager {
     });
 
     document.addEventListener('mousemove', (event) => {
-      if (!this.locked) return;
+      if (!this.locked || !this.enabled) return;
 
       // movementX/movementY are raw pointer-lock deltas. Apply the look change
       // now, before the next animation frame, rather than during physics.
@@ -184,7 +221,7 @@ export class InputManager {
 
   /** Read input and clear the per-frame mouse deltas. */
   read(): InputState {
-    const state = this.buildState();
+    const state = this.enabled ? this.buildState() : ZERO_INPUT;
     this.dx = 0;
     this.dy = 0;
     this.jumpLatch = false;

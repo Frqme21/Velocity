@@ -297,6 +297,17 @@ export class CombatSystem {
   // Reset
   // ------------------------------------------------------------------
 
+  /**
+   * Kill an enemy from a scripted event.
+   *
+   * The intro cinematic uses this for its guaranteed kill: the same sparks,
+   * slice arc, feedback and dash refill as a real melee kill, but without
+   * depending on where the camera happens to be pointing that frame.
+   */
+  killEnemy(enemy: PistolEnemy) {
+    this.kill(enemy);
+  }
+
   /** Bring every enemy back to life. */
   respawnAll() {
     for (const enemy of this.enemies) {
