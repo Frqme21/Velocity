@@ -40,13 +40,14 @@ export function loadLevel(
 
   const meshes: BABYLON.AbstractMesh[] = [];
   const bodies: RAPIER.RigidBody[] = [];
+  const debugMeshes: BABYLON.Mesh[] = [];
   const lights: BABYLON.Light[] = [];
   const grappleAnchors: { position: BABYLON.Vector3; landing: BABYLON.Vector3 }[] = [];
   const enemySpawns: BABYLON.Vector3[] = [];
 
-  const spawn = new BABYLON.Vector3(data.spawn[0], data.spawn[1], data.spawn[2]);
+  const spawn = new BABYLON.Vector3(data.spawn[0], Math.max(data.spawn[1], 0.92), data.spawn[2]);
   const gs = data.gameplaySpawn ?? data.spawn;
-  const gameplaySpawn = new BABYLON.Vector3(gs[0], gs[1], gs[2]);
+  const gameplaySpawn = new BABYLON.Vector3(gs[0], Math.max(gs[1], 0.92), gs[2]);
 
   // --- Components -----------------------------------------------------------
   for (const props of data.components) {
@@ -55,11 +56,28 @@ export function loadLevel(
       meshes.push(mesh);
       shadowGenerator?.addShadowCaster(mesh);
     }
-    if (result.body) bodies.push(result.body);
+    if (result.body) {
+      bodies.push(result.body);
+      const pos = result.body.translation();
+      console.log(`[loadLevel] collider: ${props.id} type=${props.type} pos=(${pos.x.toFixed(2)},${pos.y.toFixed(2)},${pos.z.toFixed(2)}) scale=[${props.scale.join(',')}] collide=${props.collide}`);
+      // Debug wireframe: show the collider bounds in lime green.
+      const dbg = BABYLON.MeshBuilder.CreateBox(`dbg-${props.id}`, {
+        width: props.scale[0], height: props.scale[1], depth: props.scale[2],
+      }, scene);
+      dbg.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
+      dbg.rotation.copyFrom(new BABYLON.Vector3(props.rotation[0], props.rotation[1], props.rotation[2]));
+      const dbgMat = new BABYLON.StandardMaterial(`dbg-mat-${props.id}`, scene);
+      dbgMat.emissiveColor = new BABYLON.Color3(0, 1, 0);
+      dbgMat.wireframe = true;
+      dbgMat.disableLighting = true;
+      dbg.material = dbgMat;
+      debugMeshes.push(dbg);
+    }
     if (result.anchor) grappleAnchors.push(result.anchor);
     if (result.spawn) enemySpawns.push(result.spawn);
     if (result.light) lights.push(result.light);
   }
+  console.log(`[loadLevel] created ${bodies.length} static colliders for level "${data.name}"`);
 
   // --- Explicit grapple anchors --------------------------------------------
   for (const anchor of data.grappleAnchors) {
@@ -107,6 +125,7 @@ export function loadLevel(
       if (disposed) return;
       disposed = true;
       for (const mesh of meshes) mesh.dispose();
+      for (const mesh of debugMeshes) mesh.dispose();
       for (const light of lights) light.dispose();
       materials.dispose();
     },
@@ -117,8 +136,8 @@ export function loadLevel(
 export function emptyLevel(name = 'untitled'): LevelData {
   return {
     name,
-    spawn: [0, 0.92, 14.5],
-    gameplaySpawn: [0, 0.92, 14.5],
+    spawn: [0, 0.92, 0],
+    gameplaySpawn: [0, 0.92, 0],
     killY: -6,
     components: [],
     grappleAnchors: [],

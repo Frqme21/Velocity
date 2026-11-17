@@ -162,13 +162,16 @@ function addStaticCollider(
   const body = physics.createRigidBody(
     RAPIER.RigidBodyDesc.fixed().setTranslation(position[0], position[1], position[2]),
   );
+  // Set rotation on the collider descriptor before attaching (same pattern as
+  // graybox.ts addBox), not on the body afterwards.
   const q = eulerToQuat(rotation);
-  body.setRotation(q, true);
-  const collider = physics.createCollider(
-    RAPIER.ColliderDesc.cuboid(scale[0] / 2, scale[1] / 2, scale[2] / 2),
-    body,
+  const colliderDesc = RAPIER.ColliderDesc.cuboid(
+    scale[0] / 2,
+    scale[1] / 2,
+    scale[2] / 2,
   );
-  collider.setRotation(q);
+  colliderDesc.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
+  const collider = physics.createCollider(colliderDesc, body);
   return { body, collider };
 }
 

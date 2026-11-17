@@ -40,6 +40,8 @@ export class Game {
   private customLevel = false;
   /** True after falling out of the level, until R restarts. */
   private fatal = false;
+  /** Frame counter for debug logging. */
+  private debugFrame = 0;
 
   /** Time left of the hit-stop micro freeze, in seconds. */
   private hitStopTimer = 0;
@@ -107,12 +109,30 @@ export class Game {
     // player straight into gameplay at gameplaySpawn.
     const levelName = new URLSearchParams(window.location.search).get('level');
     if (levelName) {
-      const response = await fetch(`/src/world/levels/${levelName}.json`);
-      if (!response.ok) {
+      let data: unknown = null;
+      try {
+        const response = await fetch(`/src/world/levels/${levelName}.json`);
+        if (response.ok) {
+          data = await response.json();
+        }
+      } catch {
+        // fetch failed (offline, etc.) — fall through to localStorage.
+      }
+      // Fallback: level saved from the editor via localStorage.
+      if (data === null) {
+        const stored = localStorage.getItem(`velocity-level-${levelName}`);
+        if (stored) {
+          try {
+            data = JSON.parse(stored);
+          } catch {
+            data = null;
+          }
+        }
+      }
+      if (data === null) {
         throw new Error(`Level not found: /src/world/levels/${levelName}.json`);
       }
-      const data = await response.json();
-      this.world = loadLevel(data, this.scene, this.rapierWorld, shadowGenerator);
+      this.world = loadLevel(data as never, this.scene, this.rapierWorld, shadowGenerator);
       this.customLevel = true;
     } else {
       this.world = createFirstLevel(this.scene, this.rapierWorld, shadowGenerator);
@@ -359,6 +379,13 @@ export class Game {
       this.controller.update(simulationDt);
       if (!frozen) this.physics.step();
       this.grappler.update(simulationDt);
+
+      // Debug: log player position and physics step every 60 frames
+      this.debugFrame++;
+      if (this.debugFrame % 60 === 0) {
+        const p = this.controller.position;
+        console.log(`[Game] step pos=(${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}) grounded=${this.controller.isGrounded} speed=${this.controller.horizontalSpeed.toFixed(2)}`);
+      }
 
       // Write the final camera transform after physics and immediately before
       // rendering, so camera.rotation can never lag behind by one frame.

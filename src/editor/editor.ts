@@ -42,6 +42,7 @@ export class Editor {
 
   // Input / camera
   private pointerDown = false;
+  private dragButton = -1;
   private dragObject = false;
   private lastPointer = { x: 0, y: 0 };
   private alpha = 0;
@@ -92,6 +93,9 @@ export class Editor {
     this.scene.clearColor = new BABYLON.Color4(0.06, 0.09, 0.13, 1);
     this.scene.collisionsEnabled = false;
 
+    // Shared material registry (same one the game loader uses → 1:1 export).
+    this.materials = new MaterialRegistry(this.scene);
+
     const ambient = new BABYLON.HemisphericLight('ambient', new BABYLON.Vector3(0, 1, 0), this.scene);
     ambient.intensity = 0.7;
     ambient.groundColor = new BABYLON.Color3(0.12, 0.15, 0.19);
@@ -127,6 +131,21 @@ export class Editor {
     const gridBody = this.physics.createRigidBody(RAPIER.RigidBodyDesc.fixed());
     this.physics.createCollider(RAPIER.ColliderDesc.cuboid(100, 0.1, 100), gridBody);
 
+    // Starter floor under the default spawn so clicking Play works immediately.
+    const starterProps: ComponentProps = {
+      id: 'starter-floor',
+      type: 'floor',
+      position: [0, -0.25, 0],
+      rotation: [0, 0, 0],
+      scale: [16, 0.5, 16],
+      collide: true,
+    };
+    const starter = this.registry.build(this.scene, this.physics, this.materials, starterProps, this.shadowGen);
+    const floorMesh = starter.meshes[0];
+    this.instances.push({ id: 'starter-floor', type: 'floor', props: starterProps, mesh: floorMesh, body: starter.body });
+    this.select(this.instances[0]);
+    this.counters.set('floor', 1);
+
     this.engine.runRenderLoop(() => {
       this.updateCamera();
       this.scene.render();
@@ -148,15 +167,45 @@ export class Editor {
 
   // ------------------------------------------------------------------ input
 
+  /** Convert page pointer coords to canvas-relative coords for picking. */
+  private canvasCoords(e: PointerEvent): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
   private onPointerDown(e: PointerEvent) {
     this.pointerDown = true;
+    this.dragButton = e.button;
     this.lastPointer = { x: e.clientX, y: e.clientY };
 
+    if (e.button === 2) {
+      // Right-click: pan only, no context menu.
+      e.preventDefault();
+      return;
+    }
+
     if (e.button === 0) {
-      if (this.selected) {
-        this.dragObject = true;
+      const { x, y } = this.canvasCoords(e);
+      const pickResult = this.scene.pick(x, y, (mesh) => {
+        return this.instances.some((i) => i.mesh === mesh);
+      }, false, this.camera);
+
+      if (pickResult.hit && pickResult.pickedMesh) {
+        const instance = this.instances.find((i) => i.mesh === pickResult.pickedMesh!);
+        if (instance) {
+          if (instance === this.selected) {
+            // Clicked the already-selected object again: start dragging it.
+            this.dragObject = true;
+          } else {
+            // Clicked a different object: select it instead of dragging.
+            this.select(instance);
+            this.dragObject = false;
+          }
+        }
       } else {
-        this.pickAt(e.clientX, e.clientY);
+        // Clicked empty space: deselect.
+        this.select(null);
+        this.dragObject = false;
       }
     }
   }
@@ -166,33 +215,36 @@ export class Editor {
     const dy = e.clientY - this.lastPointer.y;
     this.lastPointer = { x: e.clientX, y: e.clientY };
 
-    if (this.dragObject && this.selected && this.pointerDown) {
-      this.moveSelectedOnPlane(e.clientX, e.clientY, this.selected.props.position[1]);
+    if (!this.pointerDown) return;
+
+    if (this.dragButton === 0 && this.dragObject && this.selected) {
+      const { x, y } = this.canvasCoords(e);
+      this.moveSelectedOnPlane(x, y, this.selected.props.position[1]);
       return;
     }
 
-    if (this.pointerDown) {
-      if (e.button === 0) {
-        // Orbit around target.
-        this.alpha -= dx * 0.004;
-        this.beta = Math.min(Math.max(this.beta - dy * 0.004, 0.05), 1.45);
-      } else if (e.button === 2) {
-        // Pan.
-        const cam = this.camera;
-        const forward = cam.getForwardRay().direction;
-        forward.y = 0;
-        forward.normalize();
-        const right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up());
-        right.normalize();
-        const up = BABYLON.Vector3.Up();
-        const pan = right.scale((dx * 0.01) * this.radius * 0.001).add(up.scale((-dy * 0.01) * this.radius * 0.001));
-        this.target.addInPlace(pan);
-      }
+    if (this.dragButton === 0) {
+      // Orbit around target.
+      this.alpha -= dx * 0.004;
+      this.beta = Math.min(Math.max(this.beta - dy * 0.004, 0.05), 1.45);
+    } else if (this.dragButton === 2) {
+      // Pan.
+      const cam = this.camera;
+      const forward = cam.getForwardRay().direction;
+      forward.y = 0;
+      forward.normalize();
+      const right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up());
+      right.normalize();
+      const up = BABYLON.Vector3.Up();
+      const speed = 0.005 * this.radius;
+      const pan = right.scale(dx * speed).add(up.scale(-dy * speed));
+      this.target.addInPlace(pan);
     }
   }
 
   private onPointerUp() {
     this.pointerDown = false;
+    this.dragButton = -1;
     this.dragObject = false;
   }
 
@@ -205,7 +257,7 @@ export class Editor {
   private pickAt(x: number, y: number) {
     const pickResult = this.scene.pick(x, y, (mesh) => {
       return this.instances.some((i) => i.mesh === mesh);
-    });
+    }, false, this.camera);
     if (pickResult.hit && pickResult.pickedMesh) {
       const instance = this.instances.find((i) => i.mesh === pickResult.pickedMesh!);
       if (instance) this.select(instance);
@@ -256,10 +308,16 @@ export class Editor {
     this.counters.set(type, count);
     const id = `${type}-${count}`;
     const [dx, dy, dz] = def.defaultScale;
+    // Place floors with their top surface at y=0 (matches the hand-authored
+    // first level, where the player capsule bottom at ~0.005 clears it).
+    // Everything else sits with its bottom on the ground (y=0).
+    // Components stack going -Z so they never overlap the default spawn at origin.
+    const isFloor = type === 'floor' || type.endsWith('_floor') || type === 'grate_floor' || type === 'asphalt' || type === 'rooftop_gravel';
+    const posY = type === 'playerSpawn' ? 0.92 : (isFloor ? -dy / 2 : dy / 2);
     const props: ComponentProps = {
       id,
       type,
-      position: [0, dy / 2 + 0.5, 8 + count * 2],
+      position: [0, posY, -8 - (count - 1) * 2],
       rotation: [0, 0, 0],
       scale: [dx, dy, dz],
       collide: true,
@@ -343,22 +401,47 @@ export class Editor {
     this.elInspector.appendChild(vec3('Rotation', 'rotation'));
     this.elInspector.appendChild(vec3('Scale', 'scale'));
 
+    // --- Material dropdown (no typing required) ---
+    const TEXTURES = [
+      '(plain)',
+      'concrete_wall', 'concrete_floor', 'cracked_concrete', 'brick_wall',
+      'corrugated_metal', 'rusted_metal', 'scratched_metal', 'graffiti',
+      'plastic_crate', 'cardboard_box', 'wooden_crate', 'barrel', 'dumpster',
+      'trash_bag', 'sign_blank', 'sign_neon', 'poster', 'air_vent', 'duct_metal',
+      'pipe_metal', 'window_lit', 'window_dark', 'billboard_ads', 'circuit_board',
+      'server_rack', 'chainlink', 'mesh_fence', 'caution_stripe', 'scaffolding',
+      'cable_bundle',
+    ];
+
     const matField = document.createElement('div');
     matField.className = 'field';
     const matLabel = document.createElement('label');
-    matLabel.textContent = 'Material';
+    matLabel.textContent = 'Material / Texture';
     matField.appendChild(matLabel);
-    const matInput = document.createElement('input');
-    matInput.type = 'text';
-    matInput.value = i.props.material ?? '';
-    matInput.placeholder = 'texture filename (e.g. concrete_wall)';
-    matInput.addEventListener('change', () => {
-      i.props.material = matInput.value || undefined;
+    const matSelect = document.createElement('select');
+    matSelect.style.width = '100%';
+    matSelect.style.padding = '5px 8px';
+    matSelect.style.background = '#0b0f16';
+    matSelect.style.border = '1px solid #33465c';
+    matSelect.style.color = '#e8edf5';
+    matSelect.style.borderRadius = '3px';
+    matSelect.style.fontSize = '12px';
+    const current = i.props.material ?? '(plain)';
+    for (const name of TEXTURES) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name === '(plain)' ? '(plain / no texture)' : name;
+      opt.selected = name === current;
+      matSelect.appendChild(opt);
+    }
+    matSelect.addEventListener('change', () => {
+      const val = matSelect.value;
+      i.props.material = val === '(plain)' ? undefined : val;
       this.rebuild(i);
       this.refreshInspector();
       this.select(i);
     });
-    matField.appendChild(matInput);
+    matField.appendChild(matSelect);
     this.elInspector.appendChild(matField);
 
     const collide = document.createElement('div');
@@ -516,9 +599,12 @@ export class Editor {
     // that the level round-trips through the editor 1:1. The game loader
     // reads spawn / anchor / enemy data from the component builds themselves.
     const playerSpawn = this.instances.find((i) => i.type === 'playerSpawn');
-    const spawn: [number, number, number] = playerSpawn
+    const rawSpawn = playerSpawn
       ? [playerSpawn.props.position[0], playerSpawn.props.position[1], playerSpawn.props.position[2]]
-      : [0, 0.92, 14.5];
+      : [0, 0.92, 0];
+    // Never spawn below standing height: if you place the spawn marker
+    // underground the game still puts you on top of the floor.
+    const spawn: [number, number, number] = [rawSpawn[0], Math.max(rawSpawn[1], 0.92), rawSpawn[2]];
 
     return {
       name: this.elLevelName.value || 'untitled',
@@ -553,8 +639,10 @@ export class Editor {
 
   private playLevel() {
     const name = this.elLevelName.value || 'untitled';
-    // Also export first so the JSON file exists for the game to fetch.
+    // Persist so the game can load it via ?level=name (localStorage fallback).
+    localStorage.setItem(`velocity-level-${name}`, JSON.stringify(this.serialize(), null, 2));
     this.exportLevel();
+    this.setStatus(`Saved "${name}" — launching game...`);
     window.location.href = `/?level=${encodeURIComponent(name)}`;
   }
 
