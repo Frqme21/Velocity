@@ -16,6 +16,7 @@ interface Instance {
   props: ComponentProps;
   mesh: BABYLON.AbstractMesh;
   body?: RAPIER.RigidBody;
+  hitbox?: BABYLON.Mesh;
 }
 
 export class Editor {
@@ -142,7 +143,9 @@ export class Editor {
     };
     const starter = this.registry.build(this.scene, this.physics, this.materials, starterProps, this.shadowGen);
     const floorMesh = starter.meshes[0];
-    this.instances.push({ id: 'starter-floor', type: 'floor', props: starterProps, mesh: floorMesh, body: starter.body });
+    const starterInstance: Instance = { id: 'starter-floor', type: 'floor', props: starterProps, mesh: floorMesh, body: starter.body };
+    this.syncHitbox(starterInstance);
+    this.instances.push(starterInstance);
     this.select(this.instances[0]);
     this.counters.set('floor', 1);
 
@@ -285,6 +288,10 @@ export class Editor {
     if (selected.body) {
       selected.body.setTranslation({ x: point.x, y: p[1], z: point.z }, true);
     }
+    if (selected.hitbox) {
+      selected.hitbox.position.x = point.x;
+      selected.hitbox.position.z = point.z;
+    }
     this.refreshInspector();
   }
 
@@ -325,9 +332,52 @@ export class Editor {
     const result = this.registry.build(this.scene, this.physics, this.materials, props, this.shadowGen);
     const mesh = result.meshes[0];
     const instance: Instance = { id, type, props, mesh, body: result.body };
+    this.syncHitbox(instance);
     this.instances.push(instance);
     this.select(instance);
     this.setStatus(`Added ${def.label}`);
+  }
+
+  /**
+   * Refresh the lime wireframe that visualises the real Rapier collider of
+   * an instance. It is rebuilt from the collider's own half-extents so it
+   * always matches the hitbox exactly, even for plates and ramps whose
+   * thickness differs from the object scale.
+   */
+  private syncHitbox(instance: Instance) {
+    instance.hitbox?.dispose();
+    instance.hitbox = undefined;
+    if (!instance.body) return;
+
+    let hx = instance.props.scale[0] / 2;
+    let hy = instance.props.scale[1] / 2;
+    let hz = instance.props.scale[2] / 2;
+    try {
+      const collider = instance.body.collider(0);
+      const he = collider.halfExtents();
+      if (he) { hx = he.x; hy = he.y; hz = he.z; }
+    } catch { /* fall back to props */ }
+
+    const box = BABYLON.MeshBuilder.CreateBox(`hitbox-${instance.id}`, {
+      width: hx * 2, height: hy * 2, depth: hz * 2,
+    }, this.scene);
+    box.position.copyFrom(new BABYLON.Vector3(
+      instance.props.position[0],
+      instance.props.position[1],
+      instance.props.position[2],
+    ));
+    box.rotation.copyFrom(new BABYLON.Vector3(
+      instance.props.rotation[0],
+      instance.props.rotation[1],
+      instance.props.rotation[2],
+    ));
+    const mat = new BABYLON.StandardMaterial(`hitbox-mat-${instance.id}`, this.scene);
+    mat.emissiveColor = new BABYLON.Color3(0.15, 1, 0.25);
+    mat.wireframe = true;
+    mat.disableLighting = true;
+    box.material = mat;
+    box.isPickable = false;
+    instance.hitbox = box;
   }
 
   private rebuild(instance: Instance) {
@@ -338,6 +388,7 @@ export class Editor {
     const result = this.registry.build(this.scene, this.physics, this.materials, instance.props, this.shadowGen);
     instance.mesh = result.meshes[0];
     instance.body = result.body;
+    this.syncHitbox(instance);
     if (this.selected === instance) {
       this.hl.addMesh(instance.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
     }
@@ -346,6 +397,7 @@ export class Editor {
   private deleteSelected() {
     if (!this.selected) return;
     this.selected.mesh.dispose();
+    this.selected.hitbox?.dispose();
     if (this.selected.body) this.physics.removeRigidBody(this.selected.body);
     this.instances = this.instances.filter((i) => i !== this.selected);
     this.select(null);
@@ -381,13 +433,15 @@ export class Editor {
         input.type = 'number';
         input.step = '0.01';
         input.value = String(i.props[attr][k]);
-        input.addEventListener('change', () => {
+        input.addEventListener('input', () => {
           const n = parseFloat(input.value);
           if (!Number.isNaN(n)) {
             i.props[attr][k] = n;
             this.rebuild(i);
-            this.refreshInspector();
-            this.select(i);
+            if (this.selected === i) {
+              this.hl.removeMesh(i.mesh as BABYLON.Mesh);
+              this.hl.addMesh(i.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
+            }
           }
         });
         input.style.width = '56px';
@@ -540,6 +594,7 @@ export class Editor {
   private newLevel() {
     for (const inst of this.instances) {
       inst.mesh.dispose();
+      inst.hitbox?.dispose();
       if (inst.body) this.physics.removeRigidBody(inst.body);
     }
     this.instances = [];
@@ -585,6 +640,7 @@ export class Editor {
         mesh: result.meshes[0],
         body: result.body,
       };
+      this.syncHitbox(instance);
       this.instances.push(instance);
       const count = (this.counters.get(props.type) ?? 0) + 1;
       this.counters.set(props.type, count);

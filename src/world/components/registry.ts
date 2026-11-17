@@ -128,12 +128,18 @@ function tilingFor(props: ComponentProps, def: ComponentDef): [number, number] {
   if (props.uScale !== undefined && props.vScale !== undefined) {
     return [props.uScale, props.vScale];
   }
-  if (def.defaultTiling) return def.defaultTiling;
-  const [sx, , sz] = props.scale;
-  const isSurface = def.category === 'Walls' || def.category === 'Floors';
+  const [sx, sy, sz] = props.scale;
+  const isSurface = def.category === 'Walls' || def.category === 'Floors'
+    || props.type === 'wall' || props.type === 'floor';
   if (isSurface) {
-    return [Math.max(0.5, sx / 4), Math.max(0.5, sz / 4)];
+    // Tiling follows the real size of the surface: one texture repeat per
+    // 4 metres. Horizontal slabs tile along X/Z, vertical walls along X/Y.
+    const horizontal = sy <= 1;
+    const u = Math.max(1, Math.round(sx / 4));
+    const v = Math.max(1, Math.round((horizontal ? sz : sy) / 4));
+    return [u, v];
   }
+  if (def.defaultTiling) return def.defaultTiling;
   return [1, 1];
 }
 
@@ -187,9 +193,10 @@ function configureMesh(
   mesh.rotation.copyFrom(
     new BABYLON.Vector3(props.rotation[0], props.rotation[1], props.rotation[2]),
   );
-  mesh.scaling.copyFrom(
-    new BABYLON.Vector3(props.scale[0], props.scale[1], props.scale[2]),
-  );
+  // NOTE: the mesh is created with its final dimensions already (see the
+  // CreateBox calls), so NO scaling is applied here. Applying it as well
+  // would scale the visuals by scale^2 while the collider stays at scale,
+  // making the hitbox look far too small.
   mesh.material = material;
   mesh.receiveShadows = true;
   shadowGenerator?.addShadowCaster(mesh);
@@ -334,7 +341,7 @@ export function buildDefaultRegistry(): ComponentRegistry {
       mesh.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
       mesh.rotation.y = props.rotation[1];
       mesh.rotation.z = angle;
-      mesh.scaling.copyFrom(new BABYLON.Vector3(props.scale[0], props.scale[1], props.scale[2]));
+      // No extra scaling: the box is already created at its final size.
       mesh.material = materialFor(reg, props, defRamp);
       mesh.receiveShadows = true;
       shadowGenerator?.addShadowCaster(mesh);

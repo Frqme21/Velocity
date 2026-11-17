@@ -60,9 +60,18 @@ export function loadLevel(
       bodies.push(result.body);
       const pos = result.body.translation();
       console.log(`[loadLevel] collider: ${props.id} type=${props.type} pos=(${pos.x.toFixed(2)},${pos.y.toFixed(2)},${pos.z.toFixed(2)}) scale=[${props.scale.join(',')}] collide=${props.collide}`);
-      // Debug wireframe: show the collider bounds in lime green.
+      // Debug wireframe: show the ACTUAL collider bounds in lime green.
+      // Use the collider's own half-extents when available so the box matches
+      // the hitbox exactly (plates and ramps have custom thicknesses).
+      let hx = props.scale[0] / 2;
+      let hy = props.scale[1] / 2;
+      let hz = props.scale[2] / 2;
+      try {
+        const he = result.collider?.halfExtents();
+        if (he) { hx = he.x; hy = he.y; hz = he.z; }
+      } catch { /* fall back to props */ }
       const dbg = BABYLON.MeshBuilder.CreateBox(`dbg-${props.id}`, {
-        width: props.scale[0], height: props.scale[1], depth: props.scale[2],
+        width: hx * 2, height: hy * 2, depth: hz * 2,
       }, scene);
       dbg.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
       dbg.rotation.copyFrom(new BABYLON.Vector3(props.rotation[0], props.rotation[1], props.rotation[2]));
