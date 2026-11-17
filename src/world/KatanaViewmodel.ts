@@ -328,6 +328,16 @@ export class KatanaViewmodel {
   }
 
   /**
+   * How long the current swing has been running, in seconds.
+   *
+   * The combat system uses this to open the strike window - the slice of
+   * the swing where the blade is actually travelling through a target.
+   */
+  get swingTime(): number {
+    return this.swingElapsed;
+  }
+
+  /**
    * Build the shape of the next cut.
    *
    * The base arc is mirrored on alternate swings and every fourth cut rises

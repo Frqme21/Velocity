@@ -5,11 +5,13 @@ import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { FirstPersonController } from '../world/FirstPersonController';
 import { createGraybox } from '../world/maps/graybox';
 import { KatanaViewmodel } from '../world/KatanaViewmodel';
-import { KatanaCombat } from '../world/KatanaCombat';
 import { Grappler } from '../world/Grappler';
 import { HUD } from '../ui/HUD';
 import { AudioManager } from '../audio/AudioManager';
 import { COMBAT_CONFIG } from '../config/combat';
+import { ProjectileManager } from '../combat/ProjectileManager';
+import { CombatSystem } from '../combat/CombatSystem';
+import { PistolEnemy } from '../entities/PistolEnemy';
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -19,15 +21,20 @@ export class Game {
   private input!: InputManager;
   private controller!: FirstPersonController;
   private katana!: KatanaViewmodel;
-  private combat!: KatanaCombat;
+  private combat!: CombatSystem;
   private grappler!: Grappler;
   private hud!: HUD;
   private audio!: AudioManager;
   private physics!: PhysicsWorld;
   private rapierWorld!: RAPIER.World;
+  private projectiles!: ProjectileManager;
+  /** The guards that are shooting at the player. */
+  private enemies: PistolEnemy[] = [];
 
   /** Time left of the hit-stop micro freeze, in seconds. */
   private hitStopTimer = 0;
+  /** Set when the player was hit and the run has to be reset. */
+  private pendingReset = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -126,9 +133,44 @@ export class Game {
       console.warn('Katana viewmodel failed to load', error);
     }
 
-    // The melee registry. The enemy system will register its actors here;
-    // until then every swing whiffs and nothing is cut.
-    this.combat = new KatanaCombat();
+    // The bolts and the parry. The projectile manager owns the bullets and
+    // turns the incoming ones around when the blade is in its window. It
+    // gets the physics world as well, so the bolts stop at walls instead
+    // of sailing straight through the graybox.
+    this.projectiles = new ProjectileManager(
+      this.scene,
+      this.camera,
+      this.rapierWorld,
+      this.controller.rigidBody,
+    );
+
+    // The combat system owns the kills: the katana cuts the guards down
+    // during the strike phase, and a bolt the player sent back goes
+    // straight through them.
+    this.combat = new CombatSystem(
+      this.scene,
+      this.camera,
+      this.controller,
+      this.projectiles,
+      this.katana,
+    );
+
+    // The guards. The model is loaded once and cloned for each of them.
+    const enemyModel = await PistolEnemy.loadModel(this.scene);
+    for (let i = 0; i < graybox.enemySpawns.length; i++) {
+      const enemy = new PistolEnemy(
+        this.scene,
+        this.rapierWorld,
+        this.projectiles,
+        enemyModel,
+        graybox.enemySpawns[i],
+        i,
+        this.controller.rigidBody,
+      );
+      enemy.onFire = () => this.audio.play('enemy-shot');
+      this.enemies.push(enemy);
+      this.combat.registerEnemy(enemy);
+    }
 
     // Left mouse swings the katana. The blade animation and the hit
     // resolution are driven by the viewmodel, the hit itself by the combat
@@ -136,8 +178,47 @@ export class Game {
     this.input.onAttackPressed = () => {
       if (!this.katana.playSwing()) return;
       this.audio.play('katana-swing');
+      // The first frames of the swing are the parry window: from here on,
+      // an incoming bolt in front of the blade gets turned around.
+      this.projectiles.notifySlashStarted();
+      // A slash next to a guard pulls the player in, so a fast pass does
+      // not sail straight over the target.
+      this.lungeAtEnemy();
     };
     this.katana.onSwingImpact = () => this.resolveSwing();
+
+    // A kill freezes the world for a moment and plays the sound of the
+    // blade going through the guard.
+    this.combat.onKill = () => {
+      this.hitStopTimer = COMBAT_CONFIG.KILL_HITSTOP;
+      // The flash is what makes the freeze readable: the world holds still
+      // while the screen pops.
+      this.hud.flashHit();
+      this.audio.play('katana-slash');
+    };
+
+    // A deflect is its own little impact: freeze, punch the camera out,
+    // shake it, and clang.
+    this.projectiles.onDeflect = () => {
+      this.hitStopTimer = COMBAT_CONFIG.PARRY_HITSTOP;
+      this.controller.triggerImpactFeedback(
+        COMBAT_CONFIG.PARRY_FOV_KICK,
+        COMBAT_CONFIG.PARRY_SHAKE,
+      );
+      this.audio.play('parry');
+    };
+
+    // An incoming bolt that lands hurts: a red flash and an instant
+    // reset back to the spawn point. The reset is deferred to the end of
+    // the frame, so nothing is torn down while the frame is still running.
+    this.projectiles.onPlayerHit = () => {
+      if (this.pendingReset) return;
+      this.pendingReset = true;
+      this.hud.flashDamage();
+    };
+
+    // R resets the run by hand, the same way a death does.
+    this.input.onResetPressed = () => this.resetRun();
 
     this.audio = new AudioManager(this.scene);
     await this.audio.load();
@@ -154,28 +235,58 @@ export class Game {
       controller: this.controller,
       input: this.input,
       audio: this.audio,
+      projectiles: this.projectiles,
+      enemies: this.enemies,
     };
 
     this.engine.runRenderLoop(() => {
       const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
 
-      // Hit-stop: a tiny freeze when the blade connects. The world stops,
-      // but the swing animation keeps playing so the slash stays readable.
+      // Hit-stop: the whole world freezes for a few milliseconds when the
+      // blade connects. Everything that moves is held still - the player,
+      // the guards, the bolts and the blade itself - so the cut reads as
+      // one frozen frame instead of a stutter. Only the impact flash and
+      // the sparks keep running, so the hit still pops.
       this.hitStopTimer = Math.max(0, this.hitStopTimer - dt);
-      const simulationDt = this.hitStopTimer > 0 ? 0 : dt;
+      const frozen = this.hitStopTimer > 0;
+      const simulationDt = frozen ? 0 : dt;
 
       // The movement runs first, then the grapple visuals are refreshed so the
       // tether starts at the player's current off-hand position and ends
       // exactly at the center of the locked ring.
       this.controller.update(simulationDt);
-      this.physics.step();
-      this.grappler.update(dt);
+      if (!frozen) this.physics.step();
+      this.grappler.update(simulationDt);
 
       // Write the final camera transform after physics and immediately before
       // rendering, so camera.rotation can never lag behind by one frame.
       const playerPosition = this.controller.position;
       this.controller.syncCamera(playerPosition.x, playerPosition.y, playerPosition.z);
-      this.katana.update(dt, {
+
+      // The bolts and the guards. Bullets use the world's time scale, so
+      // the sensory boost turns them into slow motion targets.
+      this.projectiles.setPlayerPosition(playerPosition);
+      this.projectiles.update(simulationDt, this.controller.worldTimeScale);
+
+      const worldTimeScale = this.controller.worldTimeScale;
+      for (const enemy of this.enemies) {
+        enemy.update(simulationDt, worldTimeScale, playerPosition);
+      }
+      this.combat.update(dt);
+
+      // Falling into the trench resets the run.
+      if (playerPosition.y < COMBAT_CONFIG.KILL_PLANE_Y) {
+        this.pendingReset = true;
+      }
+
+      // The reset happens at the very end of the frame, so the whole frame
+      // is drawn with the world it started with.
+      if (this.pendingReset) {
+        this.pendingReset = false;
+        this.resetRun();
+      }
+
+      this.katana.update(simulationDt, {
         speed: this.controller.horizontalSpeed,
         grounded: this.controller.isGrounded,
         dashing: this.controller.isDashing,
@@ -227,5 +338,65 @@ export class Game {
 
     // Chain straight into the next dash.
     this.controller.refillDash(COMBAT_CONFIG.DASH_REFILL);
+  }
+
+  /**
+   * Pull the player toward a guard that is close to the blade.
+   *
+   * This is the gap closer of the dash-slash: a slash next to a guard
+   * bends the player's momentum toward it, so a dash at full speed does
+   * not sail straight past the target and miss the swing.
+   */
+  private lungeAtEnemy() {
+    const cameraPosition = this.camera.position;
+    const forward = this.camera.getForwardRay().direction;
+
+    let target: PistolEnemy | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const enemy of this.enemies) {
+      if (!enemy.isAlive) continue;
+
+      const toEnemy = enemy.center.subtract(cameraPosition);
+      const distance = toEnemy.length();
+      if (distance > COMBAT_CONFIG.LUNGE_RANGE) continue;
+
+      // Only a guard the player is actually swinging at pulls them in.
+      if (distance > 0.001) {
+        const direction = toEnemy.scale(1 / distance);
+        if (BABYLON.Vector3.Dot(direction, forward) <= COMBAT_CONFIG.LUNGE_CONE_DOT) {
+          continue;
+        }
+      }
+
+      if (distance < bestDistance) {
+        target = enemy;
+        bestDistance = distance;
+      }
+    }
+
+    if (!target) return;
+
+    this.controller.lungeToward(
+      target.center,
+      COMBAT_CONFIG.LUNGE_PULL_SPEED,
+      COMBAT_CONFIG.LUNGE_DIRECTION_BLEND,
+      COMBAT_CONFIG.LUNGE_DURATION,
+    );
+  }
+
+  /**
+   * Put the run back to the start.
+   *
+   * No loading screen, no menu: the player is back at the spawn point in
+   * the same frame, every bolt in the air is gone and every guard is
+   * standing again.
+   */
+  private resetRun() {
+    this.controller.respawn();
+    this.projectiles.clear();
+    this.combat.respawnAll();
+    this.hitStopTimer = 0;
+    this.pendingReset = false;
   }
 }

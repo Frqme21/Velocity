@@ -152,6 +152,51 @@ body {
   box-shadow: inset 0 0 120px rgba(0, 35, 22, 0.42);
 }
 
+#damage-flash {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background:
+    radial-gradient(
+      ellipse 75% 65% at 50% 50%,
+      rgba(255, 40, 20, 0) 30%,
+      rgba(255, 46, 18, 0.5) 82%,
+      rgba(180, 12, 4, 0.78) 100%
+    );
+  transition: opacity 0.55s ease-out;
+}
+
+#damage-flash.active {
+  opacity: 1;
+  transition: opacity 0.04s ease-in;
+}
+
+/*
+ * The impact flash of a landed cut. It snaps on with the hit-stop and
+ * melts away again, so the freeze frame reads as a punch instead of a
+ * stutter.
+ */
+#hit-flash {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background:
+    radial-gradient(
+      ellipse 55% 46% at 50% 50%,
+      rgba(255, 255, 255, 0.92) 0%,
+      rgba(198, 244, 255, 0.45) 30%,
+      rgba(120, 216, 255, 0.14) 58%,
+      rgba(90, 200, 255, 0) 78%
+    );
+  mix-blend-mode: screen;
+  transition: opacity 0.2s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+#hit-flash.active {
+  opacity: 0.62;
+  transition: opacity 0.015s ease-in;
+}
+
 @keyframes sensory-pulse {
   0%,
   100% {

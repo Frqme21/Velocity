@@ -58,12 +58,24 @@ export class InputManager {
   /** Fired when the attack button (left mouse) is pressed. */
   public onAttackPressed?: () => void;
 
+  /**
+   * Fired when the reset key (R) is pressed.
+   *
+   * This one works even without pointer lock: it is the way out of a bad
+   * situation, so it must always be available.
+   */
+  public onResetPressed?: () => void;
+
   private grappleMouseDown = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
 
     window.addEventListener('keydown', (event) => {
+      // The reset key always works, even when the pointer is not locked.
+      if (event.code === 'KeyR' && !event.repeat) {
+        this.onResetPressed?.();
+      }
       if (!this.locked) return;
       event.preventDefault();
       if (event.code === 'Space' && !event.repeat) this.jumpLatch = true;

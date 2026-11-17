@@ -6,6 +6,8 @@ export interface GrayboxWorld {
   meshes: BABYLON.AbstractMesh[];
   /** Tips of the cranes, used as grapple anchors. */
   grappleAnchors: GrappleAnchorPoint[];
+  /** Where the pistol guards stand. */
+  enemySpawns: BABYLON.Vector3[];
 }
 
 /** A grapple ring plus the spot its vault should land the player on. */
@@ -319,10 +321,25 @@ export function createGraybox(
   addCrane('crane-north', new BABYLON.Vector3(-4, 0, 28), 11, 6, Math.PI);
   addCrane('crane-south', new BABYLON.Vector3(8, 0, -30), 8, 5, 0);
 
+  // --- the pistol guards ------------------------------------------------
+  // They stand on the platforms and on the crane decks, spread out enough
+  // to chain kills from one to the next.
+  const enemySpawns = [
+    // The high platform next to the ramp.
+    new BABYLON.Vector3(14, 5, -14),
+    // The low platform behind the stairs.
+    new BABYLON.Vector3(-14, 2, 8),
+    // The deck of the western crane - right where the grapple vault lands.
+    new BABYLON.Vector3(-12.9, 6.8, 6),
+    // The deck of the eastern crane.
+    new BABYLON.Vector3(13.9, 9.8, -10),
+  ];
+
   return {
     spawn: new BABYLON.Vector3(13.05, 1, 2),
     meshes,
     grappleAnchors,
+    enemySpawns,
   };
 }
 

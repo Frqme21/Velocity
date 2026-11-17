@@ -29,8 +29,9 @@ carries you up and over the platform you hooked.
 | `A` / `D` (during sensory boost) | Short sideways evasive dash |
 | Release `Shift` / let the meter empty (during sensory boost) | Short forward dash |
 | `Ctrl` | Hold to slide; holding it while landing automatically starts a slide |
-| Left mouse | Katana slash |
+| Left mouse | Katana slash; the first `0.18 s` is a parry window |
 | Right mouse | Fire the grapple at the locked ring |
+| `R` | Instant reset (works even without pointer lock) |
 | `Esc` | Release the pointer |
 
 The look is **raw pointer-lock** input with no camera smoothing — the camera always points

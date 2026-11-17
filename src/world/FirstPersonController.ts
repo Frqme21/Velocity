@@ -3,6 +3,7 @@ import * as RAPIER from '@dimforge/rapier3d-compat';
 import { InputManager } from '../input/InputManager';
 import { MOVEMENT_CONFIG } from '../config/movement';
 import { GRAPPLE_CONFIG } from '../config/grapple';
+import { COMBAT_CONFIG } from '../config/combat';
 
 const MOVEMENT = {
   RUN_SPEED: MOVEMENT_CONFIG.RUN_SPEED,
@@ -87,6 +88,21 @@ const WALL_RUN = {
   ROLL_RESPONSE: 12,
 } as const;
 
+const LUNGE = {
+  /**
+   * How close the lunge gets to its target before it lets go, in metres.
+   * The blade reaches from there, so the pull stops as soon as it would
+   * start pushing the player into the guard.
+   */
+  STOP_DISTANCE: 1.5,
+  /**
+   * How fast the heading is bent toward the target, per second.
+   * The value from the combat config is the fraction of the heading that
+   * is corrected in one second.
+   */
+  STEER_RATE: 12,
+} as const;
+
 interface WallHit {
   normal: BABYLON.Vector3;
   tangent: BABYLON.Vector3;
@@ -165,6 +181,24 @@ export class FirstPersonController {
   };
 
   /**
+   * The dash-slash lunge.
+   *
+   * A slash next to a guard pulls the player in, so a dash at full speed
+   * does not sail straight past the target. While the timer is up the lunge
+   * owns the horizontal velocity: neither the ground friction nor the dash
+   * may swallow it.
+   */
+  private lungeTimer = 0;
+  /** Where the lunge is pulling the player to. */
+  private lungeTarget = BABYLON.Vector3.Zero();
+  /** How fast the lunge pulls, in metres per second. */
+  private lungeSpeed = 0;
+  /** How hard the lunge bends the current heading, per second. */
+  private lungeSteer = 0;
+  /** The speed the player had when the lunge started. */
+  private lungeEntrySpeed = 0;
+
+  /**
    * Active grapple pull. While set, the player is pulled along a straight
    * line towards the anchor with gravity disabled - no pendulum, no spring.
    */
@@ -192,6 +226,13 @@ export class FirstPersonController {
   /** Camera lean into the pull direction. */
   private grappleRoll = 0;
 
+  /** Where the player starts, used by the respawn. */
+  private spawnPoint: BABYLON.Vector3;
+  /** 0..1 intensity of the parry FOV kick, decays after a deflect. */
+  private parryFov = 0;
+  /** Decaying camera shake from a deflect. */
+  private parryShake = 0;
+
   /**
    * Called when the grapple pull ends.
    * - `vaulted`: the player reached the anchor and popped over the ledge.
@@ -210,6 +251,7 @@ export class FirstPersonController {
     this.camera = camera;
     this.world = world;
     this.input = input;
+    this.spawnPoint = spawn.clone();
 
     const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased()
       .setTranslation(spawn.x, spawn.y, spawn.z);
@@ -659,6 +701,11 @@ export class FirstPersonController {
         this.detachWallRun();
       }
     }
+
+    // The dash-slash lunge owns the horizontal velocity while it lasts, so
+    // it is applied after the movement code: neither the ground friction
+    // nor the dash velocity may swallow the pull.
+    this.applyLunge(scaledDt, position);
 
     // Sensory side/exit dashes are applied in real time so they still feel
     // responsive while the rest of the movement is slowed down.
@@ -1423,13 +1470,23 @@ export class FirstPersonController {
     // The pull gets its own FOV kick so the ride reads as a speed effect
     // instead of a constant glide. It fades back out after the release.
     const grappleFov = this.grappleFov * GRAPPLE_CONFIG.FOV_KICK;
+    // A deflect punches the FOV out for a moment as well.
+    const parryFov = this.parryFov;
     const targetFov = MOVEMENT.BASE_FOV
       + MOVEMENT.MAX_FOV_WIDEN * fovProgress
       + boostZoom
-      + grappleFov;
+      + grappleFov
+      + parryFov;
     const fovBlend = 1 - Math.exp(-MOVEMENT.CAMERA_FOV_RESPONSE * dt);
     this.cameraFov += (targetFov - this.cameraFov) * fovBlend;
     this.camera.fov = this.cameraFov;
+
+    // The parry kick fades out on its own.
+    this.parryFov = Math.max(0, this.parryFov - dt / 0.12);
+    this.parryShake = Math.max(
+      0,
+      this.parryShake - dt / COMBAT_CONFIG.PARRY_SHAKE_DECAY,
+    );
 
     const lateralSpeed = this.horizontalSpeed > 0.001
       ? BABYLON.Vector3.Dot(new BABYLON.Vector3(this.velX, 0, this.velZ), right) / this.horizontalSpeed
@@ -1457,10 +1514,19 @@ export class FirstPersonController {
     const shakePitch = (Math.random() - 0.5) * 0.03 * shake;
     const shakeYaw = (Math.random() - 0.5) * 0.03 * shake;
     const shakeRoll = (Math.random() - 0.5) * 0.045 * shake;
+    // A deflect gets its own micro shake: a short, sharp kick.
+    const parry = this.parryShake * this.parryShake;
+    const parryPitch = (Math.random() - 0.5) * 0.018 * parry;
+    const parryYaw = (Math.random() - 0.5) * 0.018 * parry;
+    const parryRoll = (Math.random() - 0.5) * 0.022 * parry;
     this.camera.rotation.set(
-      this.pitch + shakePitch,
-      this.yaw + shakeYaw,
-      this.cameraRoll + this.slideCameraRoll + this.grappleRoll + shakeRoll,
+      this.pitch + shakePitch + parryPitch,
+      this.yaw + shakeYaw + parryYaw,
+      this.cameraRoll
+        + this.slideCameraRoll
+        + this.grappleRoll
+        + shakeRoll
+        + parryRoll,
     );
   }
 
@@ -1500,6 +1566,185 @@ export class FirstPersonController {
    */
   refillDash(amount = 1) {
     this.dashCharge = Math.max(this.dashCharge, Math.min(1, amount));
+  }
+
+  /**
+   * Pull the player toward a target.
+   *
+   * This is the gap closer of the dash-slash: when the blade goes down
+   * right next to a guard, the player is bent toward it instead of
+   * sailing past at full speed.
+   *
+   * The pull is not a one frame nudge - it owns the horizontal velocity
+   * for a short while, so the ground friction cannot eat it and a dash
+   * keeps its speed while it bends toward the target.
+   *
+   * @param target where to pull toward, in world space
+   * @param pullSpeed how fast the player should be closing on it, in m/s
+   * @param steer how hard the heading is bent toward the target, per second
+   * @param duration how long the pull lasts, in seconds
+   */
+  lungeToward(
+    target: BABYLON.Vector3,
+    pullSpeed: number,
+    steer: number,
+    duration = 0.2,
+  ) {
+    if (duration <= 0) return;
+
+    this.lungeTarget.copyFrom(target);
+    this.lungeSpeed = pullSpeed;
+    this.lungeSteer = steer;
+    this.lungeEntrySpeed = Math.hypot(this.velX, this.velZ);
+    this.lungeTimer = Math.max(this.lungeTimer, duration);
+  }
+
+  /** True while the dash-slash lunge is pulling the player in. */
+  get isLunging(): boolean {
+    return this.lungeTimer > 0;
+  }
+
+  /**
+   * Drive the lunge.
+   *
+   * The pull never slows the player down: a dash keeps its speed and only
+   * changes direction, while a standing player is pulled in at the lunge
+   * speed. The heading is bent toward the guard over the whole window, so
+   * the player arrives next to it instead of next to where it was.
+   */
+  private applyLunge(dt: number, position: { x: number; y: number; z: number }) {
+    if (this.lungeTimer <= 0) return;
+
+    const dx = this.lungeTarget.x - position.x;
+    const dz = this.lungeTarget.z - position.z;
+    const distance = Math.hypot(dx, dz);
+
+    // Close enough - the blade reaches from here.
+    if (distance <= LUNGE.STOP_DISTANCE) {
+      this.endLunge(true);
+      return;
+    }
+
+    const dirX = dx / distance;
+    const dirZ = dz / distance;
+
+    const currentSpeed = Math.hypot(this.velX, this.velZ);
+    let speed = Math.max(currentSpeed, this.lungeSpeed);
+
+    // Bend the current heading toward the guard.
+    const curX = currentSpeed > 0.01 ? this.velX / currentSpeed : dirX;
+    const curZ = currentSpeed > 0.01 ? this.velZ / currentSpeed : dirZ;
+    const amount = 1 - Math.exp(-this.lungeSteer * LUNGE.STEER_RATE * dt);
+    let bendX = curX + (dirX - curX) * amount;
+    let bendZ = curZ + (dirZ - curZ) * amount;
+    const length = Math.hypot(bendX, bendZ);
+    if (length < 0.0001) {
+      bendX = dirX;
+      bendZ = dirZ;
+    } else {
+      bendX /= length;
+      bendZ /= length;
+    }
+
+    // Land at blade range, not one frame beyond it. At 34 m/s a single frame
+    // is over half a metre, so without this the pull shoots through the guard
+    // and leaves the player skating away.
+    const remaining = distance - LUNGE.STOP_DISTANCE;
+    const approach = bendX * dirX + bendZ * dirZ;
+    if (approach > 0.01 && speed * approach * dt > remaining) {
+      speed = remaining / (dt * approach);
+    }
+
+    this.velX = bendX * speed;
+    this.velZ = bendZ * speed;
+
+    // A dash rewrites the horizontal velocity from dashDirection every
+    // frame. Bend the dash itself too, or the pull above is undone on the
+    // next frame and the player sails straight past the guard.
+    if (this.dashTimeRemaining > 0) {
+      this.dashDirection.x = bendX;
+      this.dashDirection.z = bendZ;
+    }
+
+    this.lungeTimer = Math.max(0, this.lungeTimer - dt);
+    if (this.lungeTimer <= 0) this.endLunge(false);
+  }
+
+  /**
+   * Finish the pull, shedding the speed the lunge itself added.
+   *
+   * Arriving at the guard commits the slash: the dash ends there, so the
+   * player stops beside the target instead of being flung past it.
+   */
+  private endLunge(atTarget: boolean) {
+    this.lungeTimer = 0;
+    if (atTarget) this.dashTimeRemaining = 0;
+
+    const speed = Math.hypot(this.velX, this.velZ);
+    // Never speed the player up on exit: a capped final step is slower than
+    // the entry dash, and that is the speed the player should keep.
+    const exitSpeed = Math.min(this.lungeEntrySpeed, speed);
+    if (speed <= exitSpeed) return;
+    const scale = exitSpeed / speed;
+    this.velX *= scale;
+    this.velZ *= scale;
+  }
+
+  /**
+   * The world time scale.
+   *
+   * Sensory boost drops this to 0.2, so anything that moves with the world
+   * (bullets, for instance) crawls through the slow motion.
+   */
+  get worldTimeScale(): number {
+    return this.timeScale;
+  }
+
+  /**
+   * Kick the camera after an impact.
+   *
+   * A short FOV widening and a small shake: a parry or a kill should land
+   * as hard as the hit it replaces.
+   */
+  triggerImpactFeedback(fovKick: number, shake: number) {
+    this.parryFov = Math.max(this.parryFov, fovKick);
+    this.parryShake = Math.max(this.parryShake, shake);
+  }
+
+  /**
+   * Put the player back at the spawn point.
+   *
+   * Used when an incoming bolt hits: the player is dropped straight back at
+   * the start with no loading and no menu in between.
+   */
+  respawn() {
+    // Drop everything that is going on.
+    if (this.grappleTarget) this.endGrapplePull('cancelled', false);
+    this.detachWallRun();
+    this.endSlide(false);
+    this.cancelSensoryBoost();
+    this.mantle.active = false;
+    this.sensoryDashTime = 0;
+    this.dashTimeRemaining = 0;
+    this.lungeTimer = 0;
+    this.wallRunTime = 0;
+    this.jumpGraceTimer = 0;
+
+    // No momentum, no boost, full meter.
+    this.velX = 0;
+    this.velZ = 0;
+    this.vy = 0;
+    this.timeScale = 1;
+    this.dashCharge = 1;
+    this.parryFov = 0;
+    this.parryShake = 0;
+
+    // Back to the start.
+    this.body.setNextKinematicTranslation(this.spawnPoint);
+    this.body.setTranslation(this.spawnPoint, true);
+    this.yaw = 0;
+    this.pitch = 0;
+    this.grounded = false;
   }
 
   get isGrounded(): boolean {

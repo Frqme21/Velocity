@@ -1,13 +1,20 @@
 import * as BABYLON from '@babylonjs/core';
 
 /** Identifiers for the clips the game can play. */
-export type SfxId = 'katana-swing' | 'katana-slash';
+export type SfxId = 'katana-swing' | 'katana-slash' | 'parry' | 'enemy-shot';
 
 interface ClipDefinition {
   url: string;
   volume: number;
   /** How many voices to keep, so consecutive hits can overlap. */
   voices: number;
+  /**
+   * Used when the file could not be loaded.
+   *
+   * The parry needs a clang no matter what, so it synthesizes a metallic
+   * ping with the Web Audio API when the sample is unavailable.
+   */
+  fallback?: () => void;
 }
 
 const CLIPS: Record<SfxId, ClipDefinition> = {
@@ -15,6 +22,15 @@ const CLIPS: Record<SfxId, ClipDefinition> = {
   'katana-swing': { url: '/sounds/katana_swing.wav', volume: 0.5, voices: 2 },
   // The metallic "shing" of the blade cutting through a target.
   'katana-slash': { url: '/sounds/katana_slash.wav', volume: 0.75, voices: 3 },
+  // The clang of a bolt deflected off the blade.
+  'parry': {
+    url: '/sounds/parry.wav',
+    volume: 0.85,
+    voices: 2,
+    fallback: () => playMetallicPing(),
+  },
+  // The pistol of a guard. Several can fire at once, so it gets voices.
+  'enemy-shot': { url: '/sounds/enemy_shot.wav', volume: 0.5, voices: 4 },
 };
 
 interface Clip {
@@ -77,15 +93,22 @@ export class AudioManager {
   /**
    * Play a clip on the next free voice of its pool.
    *
-   * Missing or not-yet-loaded clips are silently ignored.
+   * A clip that is missing or not-yet-loaded falls back to its synthesized
+   * version, if it has one.
    */
   play(id: SfxId, options?: { volume?: number; rate?: number }) {
     const clip = this.clips.get(id);
-    if (!clip || clip.instances.length === 0) return;
+    if (!clip || clip.instances.length === 0) {
+      clip?.definition.fallback?.();
+      return;
+    }
 
     const instance = clip.instances[clip.next];
     clip.next = (clip.next + 1) % clip.instances.length;
-    if (!instance || !instance.isReady()) return;
+    if (!instance || !instance.isReady()) {
+      clip.definition.fallback?.();
+      return;
+    }
 
     instance.setVolume(options?.volume ?? clip.definition.volume);
     if (options?.rate) instance.setPlaybackRate(options.rate);
@@ -96,6 +119,61 @@ export class AudioManager {
   unlock() {
     BABYLON.AbstractEngine.audioEngine?.unlock();
   }
+}
+
+/**
+ * A crisp metallic ping, synthesized with the Web Audio API.
+ *
+ * Used as the parry fallback when the clang sample cannot be loaded: a
+ * short noise strike for the contact, plus three detuned partials for the
+ * ring of the blade.
+ */
+function playMetallicPing(volume = 0.55) {
+  const context = BABYLON.AbstractEngine.audioEngine?.audioContext;
+  if (!context) return;
+  if (context.state === 'suspended') void context.resume();
+
+  const now = context.currentTime;
+
+  const master = context.createGain();
+  master.gain.value = volume;
+  master.connect(context.destination);
+
+  // The strike itself: a very short band of noise.
+  const noiseLength = Math.floor(context.sampleRate * 0.05);
+  const noiseBuffer = context.createBuffer(1, noiseLength, context.sampleRate);
+  const noiseData = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < noiseLength; i++) {
+    noiseData[i] = (Math.random() * 2 - 1) * (1 - i / noiseLength);
+  }
+
+  const noise = context.createBufferSource();
+  noise.buffer = noiseBuffer;
+  const noiseFilter = context.createBiquadFilter();
+  noiseFilter.type = 'bandpass';
+  noiseFilter.frequency.value = 3200;
+  noiseFilter.Q.value = 2;
+  const noiseGain = context.createGain();
+  noiseGain.gain.value = 0.55;
+  noise.connect(noiseFilter).connect(noiseGain).connect(master);
+  noise.start(now);
+
+  // The ring: a few inharmonic partials, like a struck blade.
+  const partials = [1860, 2790, 4180];
+  partials.forEach((frequency, index) => {
+    const oscillator = context.createOscillator();
+    oscillator.type = 'triangle';
+    oscillator.frequency.value = frequency;
+
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.4 / (index + 1), now + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35 + index * 0.08);
+
+    oscillator.connect(gain).connect(master);
+    oscillator.start(now);
+    oscillator.stop(now + 0.7);
+  });
 }
 
 function delay(ms: number) {
