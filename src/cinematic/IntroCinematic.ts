@@ -235,15 +235,26 @@ export class IntroCinematic {
 
     // The body teleports to the courtyard; the player keeps looking down the
     // route, which is exactly where the last camera frame was pointing.
+    // Compute the yaw/pitch from the final keyframe's eye->look vector so the
+    // controller's internal state matches the cinematic's final orientation.
+    // Babylon uses yaw=0 for -Z forward; the final frame looks along +Z.
+    const finalKey = KEYS[KEYS.length - 1];
+    const dx = finalKey.look[0] - finalKey.eye[0];
+    const dy = finalKey.look[1] - finalKey.eye[1];
+    const dz = finalKey.look[2] - finalKey.eye[2];
+    const horizLen = Math.hypot(dx, dz);
+    const yaw = horizLen > 0.001 ? Math.atan2(dx, dz) : 0;
+    const pitch = Math.max(-1.5, Math.min(1.5, horizLen > 0.001 ? Math.asin(-dy / Math.hypot(dx, dy, dz)) : 0));
+
     this.deps.controller.setSpawn(this.deps.gameplaySpawn);
-    this.deps.controller.setPose(this.deps.gameplaySpawn, 0, 0);
+    this.deps.controller.setPose(this.deps.gameplaySpawn, yaw, pitch);
 
     // CRITICAL: clear any latched impact feedback AFTER setPose.
     // setPose resets cameraFov to BASE_FOV; we must restore the cinematic's
     // final FOV and zero all shake/roll sources that may have been set by the
     // scripted kill during the intro. Use the final keyframe FOV (78°) so the
     // handover FOV is correct even when skipping.
-    const finalFov = (KEYS[KEYS.length - 1].fov * Math.PI) / 180;
+    const finalFov = (finalKey.fov * Math.PI) / 180;
     this.deps.controller.prepareHandover(finalFov);
 
     this.deps.onFinish();
