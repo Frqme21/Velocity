@@ -47,7 +47,16 @@ export const COMBAT_CONFIG = {
   SLASH_END: 0.78,
   /** How long the finished slash keeps glowing, in seconds. */
   SLASH_FADE: 0.14,
-  /** How long the blade takes to ease back into its resting pose, in seconds. */
+  /**
+   * How long the steel takes to dissolve into the light at the start of a
+   * cut, in seconds. It dissolves where it is - the blade is never yanked
+   * across the screen.
+   */
+  SLASH_DISSOLVE: 0.05,
+  /**
+   * How long the blade takes to fade back in at the grip, in seconds.
+   * It returns to the resting pose instead of flying in from the side.
+   */
   SLASH_RECOVER: 0.12,
   /** Width of the light trail, in metres. */
   SLASH_WIDTH: 0.08,
@@ -55,4 +64,14 @@ export const COMBAT_CONFIG = {
   SLASH_CORE_COLOR: { r: 1, g: 1, b: 1 },
   /** The coloured glow around the core. */
   SLASH_EDGE_COLOR: { r: 0.45, g: 0.92, b: 1 },
+  /**
+   * Cut the other way on every second slash, and upwards on every fourth
+   * one, so a chain of attacks does not look like the same cut repeated.
+   */
+  SLASH_ALTERNATE: true,
+  /**
+   * How much the shape of a slash is allowed to wobble from cut to cut
+   * (0 = identical every time, 1 = wildly different).
+   */
+  SLASH_VARIATION: 0.3,
 } as const;
