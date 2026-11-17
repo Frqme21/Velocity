@@ -3,7 +3,7 @@ import * as RAPIER from '@dimforge/rapier3d-compat';
 import { InputManager } from '../input/InputManager';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { FirstPersonController } from '../world/FirstPersonController';
-import { createGraybox } from '../world/maps/graybox';
+import { createAssetViewer, type AssetViewerWorld } from '../world/maps/assetViewer';
 import { KatanaViewmodel } from '../world/KatanaViewmodel';
 import { Grappler } from '../world/Grappler';
 import { HUD } from '../ui/HUD';
@@ -26,6 +26,8 @@ export class Game {
   private hud!: HUD;
   private audio!: AudioManager;
   private physics!: PhysicsWorld;
+  /** The current world: the flat asset showroom during asset approval. */
+  private world!: AssetViewerWorld;
   private rapierWorld!: RAPIER.World;
   private projectiles!: ProjectileManager;
   /** The guards that are shooting at the player. */
@@ -92,14 +94,14 @@ export class Game {
     this.camera.upVector.set(0, 1, 0);
     this.scene.activeCamera = this.camera;
 
-    const graybox = createGraybox(this.scene, this.rapierWorld, shadowGenerator);
+    this.world = createAssetViewer(this.scene, this.rapierWorld, shadowGenerator);
 
     this.input = new InputManager(this.canvas);
     this.controller = new FirstPersonController(
       this.camera,
       this.rapierWorld,
       this.input,
-      graybox.spawn,
+      this.world.spawn,
     );
 
     this.hud = new HUD(document.getElementById('hud')!);
@@ -110,7 +112,7 @@ export class Game {
       this.rapierWorld,
       this.controller.rigidBody,
     );
-    for (const anchor of graybox.grappleAnchors) {
+    for (const anchor of this.world.grappleAnchors) {
       this.grappler.addAnchor(anchor.position, anchor.landing);
     }
     this.input.onGrapplePressed = () => {
@@ -136,7 +138,7 @@ export class Game {
     // The bolts and the parry. The projectile manager owns the bullets and
     // turns the incoming ones around when the blade is in its window. It
     // gets the physics world as well, so the bolts stop at walls instead
-    // of sailing straight through the graybox.
+    // of sailing straight through the this.world.
     this.projectiles = new ProjectileManager(
       this.scene,
       this.camera,
@@ -157,13 +159,13 @@ export class Game {
 
     // The guards. The model is loaded once and cloned for each of them.
     const enemyModel = await PistolEnemy.loadModel(this.scene);
-    for (let i = 0; i < graybox.enemySpawns.length; i++) {
+    for (let i = 0; i < this.world.enemySpawns.length; i++) {
       const enemy = new PistolEnemy(
         this.scene,
         this.rapierWorld,
         this.projectiles,
         enemyModel,
-        graybox.enemySpawns[i],
+        this.world.enemySpawns[i],
         i,
         this.controller.rigidBody,
       );
@@ -241,6 +243,9 @@ export class Game {
 
     this.engine.runRenderLoop(() => {
       const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
+
+      // The showroom props keep moving even during hit-stop.
+      this.world.update(dt);
 
       // Hit-stop: the whole world freezes for a few milliseconds when the
       // blade connects. Everything that moves is held still - the player,
