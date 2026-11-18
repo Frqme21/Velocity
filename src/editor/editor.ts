@@ -253,9 +253,21 @@ export class Editor {
     this.canvas.addEventListener('pointerleave', () => this.onPointerUp());
     this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
 
+    // Ensure keyboard events work: focus the window when canvas is clicked.
+    this.canvas.addEventListener('click', () => {
+      window.focus();
+      this.canvas.focus();
+    });
+
     // WASD/QE navigation of the viewport, Unity style.
     window.addEventListener('keydown', (e) => this.onKeyDown(e));
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('keyup', (e) => {
+      // Mirror the input-field check for consistency (no-op if key not in set).
+      const target = e.target as HTMLElement | null;
+      if (!(target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT'))) {
+        this.keys.delete(e.code);
+      }
+    });
     window.addEventListener('blur', () => this.keys.clear());
   }
 
