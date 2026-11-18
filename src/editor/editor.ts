@@ -74,6 +74,8 @@ export class Editor {
   private gizmoMode: 'translate' | 'rotate' | 'scale' | null = null;
   /** The instance actually attached to the gizmo when the drag began. */
   private dragTarget: Instance | null = null;
+  /** Which gizmo started the current drag; only scale drags may change size. */
+  private dragMode: 'translate' | 'rotate' | 'scale' | null = null;
   /** Object scale captured when a gizmo drag begins (for folding mesh.scaling). */
   private dragStartScale: [number, number, number] = [1, 1, 1];
   /** Mesh scaling at drag start; gizmo changes are measured relative to this. */
@@ -112,6 +114,8 @@ export class Editor {
     document.getElementById('btn-new')!.addEventListener('click', () => this.newLevel());
     document.getElementById('btn-save')!.addEventListener('click', () => this.saveLevel());
     document.getElementById('btn-load')!.addEventListener('click', () => this.loadLevel());
+    document.getElementById('btn-delete-saved')!.addEventListener('click', () => this.deleteSavedLevel());
+    document.getElementById('btn-duplicate')!.addEventListener('click', () => this.duplicateSelected());
     document.getElementById('btn-export')!.addEventListener('click', () => this.exportLevel());
     document.getElementById('btn-copy')!.addEventListener('click', () => this.copyLevel());
     document.getElementById('btn-play')!.addEventListener('click', () => this.playLevel());
@@ -200,11 +204,12 @@ export class Editor {
 
     // Capture the state of the mesh the gizmo is ACTUALLY attached to. Using
     // `this.selected` blindly let a stale selection poison the scale fold.
-    const onGizmoDragStart = () => {
+    const onGizmoDragStart = (mode: 'translate' | 'rotate' | 'scale') => {
       const attached = this.gizmoManager.attachedMesh;
       const target = this.instances.find((i) => i.mesh === attached) ?? this.selected;
       if (!target) return;
       this.dragTarget = target;
+      this.dragMode = mode;
       this.dragStartScale = [...target.props.scale];
       const s = (target.mesh as BABYLON.Mesh).scaling;
       this.dragStartMeshScale = [s.x, s.y, s.z];
@@ -226,19 +231,36 @@ export class Editor {
       if (target.type === 'playerSpawn' || target.type === 'enemySpawn') {
         target.props.facing = Math.round((m.rotation.y * 180 / Math.PI) * 10) / 10;
       }
-      target.props.scale = this.draggedScale(m);
+      // Moving/rotating must never change size. Only the scale gizmo folds
+      // its delta into props.scale.
+      target.props.scale = this.dragMode === 'scale'
+        ? this.draggedScale(m)
+        : [...this.dragStartScale];
       this.dragTarget = null;
+      this.dragMode = null;
       this.rebuild(target);
       this.hl.removeAllMeshes();
       this.hl.addMesh(target.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
       this.refreshInspector();
     };
-    for (const g of [posGizmo, rotGizmo, sclGizmo]) {
-      if (!g) continue;
-      g.onDragStartObservable?.add(onGizmoDragStart);
+    // Babylon exposes the drag observables on the gizmo interfaces, not on
+    // the base Gizmo class, so keep this structurally typed.
+    const wireGizmo = (
+      g: {
+        onDragStartObservable?: BABYLON.Observable<any>;
+        onDragObservable?: BABYLON.Observable<any>;
+        onDragEndObservable: BABYLON.Observable<any>;
+      } | null | undefined,
+      mode: 'translate' | 'rotate' | 'scale',
+    ) => {
+      if (!g) return;
+      g.onDragStartObservable?.add(() => onGizmoDragStart(mode));
       g.onDragObservable?.add(onGizmoDrag);
       g.onDragEndObservable.add(onGizmoDragEnd);
-    }
+    };
+    wireGizmo(posGizmo, 'translate');
+    wireGizmo(rotGizmo, 'rotate');
+    wireGizmo(sclGizmo, 'scale');
 
     // Reference floor grid.
     const grid = BABYLON.MeshBuilder.CreateGround('editor-grid', { width: 200, height: 200 }, this.scene);
@@ -307,6 +329,12 @@ export class Editor {
   private onKeyDown(e: KeyboardEvent) {
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
+      return;
+    }
+    // Duplicate the selected piece without polluting the WASD key state.
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyD') {
+      e.preventDefault();
+      this.duplicateSelected();
       return;
     }
     this.keys.add(e.code);
@@ -539,6 +567,7 @@ export class Editor {
   private select(instance: Instance | null) {
     this.selected = instance;
     this.dragTarget = null;
+    this.dragMode = null;
     this.hl.removeAllMeshes();
     if (instance) {
       this.hl.addMesh(instance.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
@@ -685,11 +714,6 @@ export class Editor {
   }
 
   /**
-   * Live-follow the mesh during a gizmo drag: move/rotate/resize the real
-   * Rapier collider and the lime hitbox wireframe so collision never lags
-   * behind the visible object. Full rebuild happens once on drag end.
-   */
-  /**
    * Absolute scale represented by the gizmo right now.
    *
    * Babylon's scale gizmo multiplies the mesh's CURRENT scaling. Some meshes
@@ -708,28 +732,37 @@ export class Editor {
     return [factor(0, m.scaling.x), factor(1, m.scaling.y), factor(2, m.scaling.z)];
   }
 
+  /**
+   * Live-follow the mesh during a gizmo drag. Translation and rotation only
+   * touch position/orientation; the size is left completely alone unless the
+   * scale gizmo is what is being dragged. This is what used to turn a wall
+   * into a tiny cube when you moved it.
+   */
   private syncBodyToMesh() {
     const i = this.dragTarget ?? this.selected;
     if (!i) return;
     const m = i.mesh as BABYLON.Mesh;
     const p = m.position;
     const r = m.rotation;
+    const scalingDrag = this.dragMode === 'scale';
+    const rotationDrag = this.dragMode === 'rotate';
 
     i.props.position = [p.x, p.y, p.z];
     i.props.rotation = [r.x, r.y, r.z];
-    i.props.scale = this.draggedScale(m);
+    if (scalingDrag) i.props.scale = this.draggedScale(m);
 
     if (i.body) {
       i.body.setTranslation({ x: p.x, y: p.y, z: p.z }, true);
       const collider = i.body.collider(0);
       if (collider) {
-        // Fixed bodies keep an identity rotation; the collider carries the
-        // orientation, so set its local rotation to the new absolute angle.
-        const q = BABYLON.Quaternion.RotationYawPitchRoll(r.y, r.x, r.z);
-        collider.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
+        if (rotationDrag) {
+          // Fixed bodies keep an identity rotation; the collider carries it.
+          const q = BABYLON.Quaternion.RotationYawPitchRoll(r.y, r.x, r.z);
+          collider.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
+        }
         const base = i.baseHalfExtents;
         const bs = i.baseScale;
-        if (base && bs) {
+        if (scalingDrag && base && bs) {
           collider.setHalfExtents({
             x: Math.max(0.01, base.x * i.props.scale[0] / bs[0]),
             y: Math.max(0.01, base.y * i.props.scale[1] / bs[1]),
@@ -741,8 +774,8 @@ export class Editor {
 
     if (i.hitbox) {
       i.hitbox.position.set(p.x, p.y, p.z);
-      i.hitbox.rotation.set(r.x, r.y, r.z);
-      if (i.baseHalfExtents && i.baseScale) {
+      if (rotationDrag) i.hitbox.rotation.set(r.x, r.y, r.z);
+      if (scalingDrag && i.baseHalfExtents && i.baseScale) {
         i.hitbox.scaling.set(
           i.props.scale[0] / i.baseScale[0],
           i.props.scale[1] / i.baseScale[1],
@@ -778,6 +811,43 @@ export class Editor {
     this.instances = this.instances.filter((i) => i !== this.selected);
     this.select(null);
     this.setStatus('Deleted component');
+  }
+
+  /** Copy the selected component with all of its properties, placed beside it. */
+  private duplicateSelected() {
+    const source = this.selected;
+    if (!source) {
+      this.setStatus('Select a component to duplicate');
+      return;
+    }
+    const props = JSON.parse(JSON.stringify(source.props)) as ComponentProps;
+    let count = this.counters.get(source.type) ?? 0;
+    do {
+      count += 1;
+      props.id = `${source.type}-${count}`;
+    } while (this.instances.some((i) => i.id === props.id));
+    this.counters.set(source.type, count);
+
+    // Step one full width along world X so the copy sits next to the original
+    // instead of inside it (and inherits every material/tag/facing/scale).
+    props.position = [
+      props.position[0] + Math.max(1, props.scale[0]),
+      props.position[1],
+      props.position[2],
+    ];
+
+    const result = this.registry.build(this.scene, this.physics, this.materials, props, this.shadowGen);
+    const copy: Instance = {
+      id: props.id,
+      type: props.type,
+      props,
+      mesh: result.meshes[0],
+      body: result.body,
+    };
+    this.syncHitbox(copy);
+    this.instances.push(copy);
+    this.select(copy);
+    this.setStatus(`Duplicated ${source.type} → ${props.id}`);
   }
 
   // ------------------------------------------------------------------ inspector
@@ -1036,6 +1106,7 @@ export class Editor {
     this.instances = [];
     this.counters.clear();
     this.dragTarget = null;
+    this.dragMode = null;
     this.select(null);
     this.elLevelName.value = 'untitled';
     this.setStatus('New level');
@@ -1045,6 +1116,17 @@ export class Editor {
     const name = this.elLevelName.value || 'untitled';
     localStorage.setItem(`velocity-level-${name}`, JSON.stringify(this.serialize(), null, 2));
     this.setStatus(`Saved "${name}" to local storage`);
+  }
+
+  /**
+   * Forget the browser copy. The game prefers `/src/world/levels/<name>.json`
+   * and only falls back to localStorage, so a stale browser save can keep an
+   * old version alive even after the disk file was moved or deleted.
+   */
+  private deleteSavedLevel() {
+    const name = this.elLevelName.value || 'untitled';
+    localStorage.removeItem(`velocity-level-${name}`);
+    this.setStatus(`Deleted browser save "${name}"`);
   }
 
   private loadLevel() {

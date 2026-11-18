@@ -99,6 +99,16 @@ const WALL_RUN = {
    * start. This keeps the trick off the floor and off low kerbs and rails.
    */
   MIN_GROUND_CLEARANCE: 0.5,
+  /**
+   * How much of the approach has to run along the wall. Lowered from 0.35 so
+   * a near-perpendicular entry still catches instead of being rejected.
+   */
+  MIN_TANGENT_ALIGNMENT: 0.12,
+  /**
+   * Reject only a literally head-on hit (dot ≈ 1). Anything under this is a
+   * valid wall-run approach, including a steep 80° angle into the surface.
+   */
+  MAX_INTO_WALL: 0.98,
 } as const;
 
 const LUNGE = {
@@ -1420,8 +1430,9 @@ export class FirstPersonController {
         : cameraForward.clone();
       const tangentAlignment = Math.abs(BABYLON.Vector3.Dot(approachDir, tangent));
       const intoWall = -BABYLON.Vector3.Dot(approachDir, normal);
-      // Require an angled approach; running straight into a wall should not start a wall run.
-      if (tangentAlignment < 0.35 || intoWall > 0.6) return;
+      // Lenient approach: almost any angle catches the wall. Only a purely
+      // head-on hit (perpendicular to the surface) is still rejected.
+      if (tangentAlignment < WALL_RUN.MIN_TANGENT_ALIGNMENT || intoWall > WALL_RUN.MAX_INTO_WALL) return;
 
       candidates.push({
         normal,
