@@ -602,7 +602,10 @@ export class FirstPersonController {
     if (!this.grappleTarget) {
       this.grappleFov = Math.max(0, this.grappleFov - dt / GRAPPLE_CONFIG.FOV_DECAY);
     }
-    if (!this.sensoryBoostActive) {
+    // The dash only comes back while the player is touching a surface. Being
+    // airborne does not refill it, so a jump grants exactly one air dash and
+    // the next one has to be earned by landing or grabbing a wall again.
+    if (!this.sensoryBoostActive && (this.grounded || this.wallRunning)) {
       this.dashCharge = Math.min(
         1,
         this.dashCharge + scaledDt / MOVEMENT.DASH_RECHARGE_TIME,
@@ -840,6 +843,8 @@ export class FirstPersonController {
       if (justLanded) {
         this.coyoteTimer = MOVEMENT.COYOTE_TIME;
         if (this.sensoryBoostActive) this.cancelSensoryBoost();
+        // Touching the floor restores the air dash right away.
+        this.dashCharge = 1;
       }
       if (
         justLanded
@@ -1481,6 +1486,8 @@ export class FirstPersonController {
   }
 
   private attachWallRun(hit: WallHit, enteredWhileRising: boolean) {
+    // Grabbing a wall counts as touching a surface: the air dash is restored.
+    this.dashCharge = 1;
     this.wallRunning = true;
     this.wallRunTime = 0;
     this.wallNormal.copyFrom(hit.normal);
