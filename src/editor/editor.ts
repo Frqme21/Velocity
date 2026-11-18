@@ -25,6 +25,12 @@ interface Instance {
   /** Collider half-extents captured at build time, for live gizmo scaling. */
   baseHalfExtents?: { x: number; y: number; z: number };
   baseScale?: [number, number, number];
+  /** Mesh scaling as built; any difference means an uncommitted visual edit. */
+  buildMeshScale: [number, number, number];
+}
+
+function meshScale(mesh: BABYLON.AbstractMesh): [number, number, number] {
+  return [mesh.scaling.x, mesh.scaling.y, mesh.scaling.z];
 }
 
 export class Editor {
@@ -219,30 +225,10 @@ export class Editor {
     // moves through walls because its collision is still at the old spot.
     const onGizmoDrag = () => this.syncBodyToMesh();
     // On release, fold the final transform into the component data and do one
-    // clean rebuild so the collider shape exactly matches the new size.
-    const onGizmoDragEnd = () => {
-      const target = this.dragTarget ?? this.selected;
-      if (!target) return;
-      const m = target.mesh as BABYLON.Mesh;
-      target.props.position = [m.position.x, m.position.y, m.position.z];
-      target.props.rotation = [m.rotation.x, m.rotation.y, m.rotation.z];
-      // Spawn markers use facing (not rotation) as their meaningful yaw —
-      // persist a gizmo rotation so the arrow keeps pointing where you put it.
-      if (target.type === 'playerSpawn' || target.type === 'enemySpawn') {
-        target.props.facing = Math.round((m.rotation.y * 180 / Math.PI) * 10) / 10;
-      }
-      // Moving/rotating must never change size. Only the scale gizmo folds
-      // its delta into props.scale.
-      target.props.scale = this.dragMode === 'scale'
-        ? this.draggedScale(m)
-        : [...this.dragStartScale];
-      this.dragTarget = null;
-      this.dragMode = null;
-      this.rebuild(target);
-      this.hl.removeAllMeshes();
-      this.hl.addMesh(target.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
-      this.refreshInspector();
-    };
+    // clean rebuild so the collider shape exactly matches the new size. This is
+    // a method so a global pointerup can also finish a drag released outside
+    // the viewport.
+    const onGizmoDragEnd = () => this.finishGizmoDrag();
     // Babylon exposes the drag observables on the gizmo interfaces, not on
     // the base Gizmo class, so keep this structurally typed.
     const wireGizmo = (
@@ -284,7 +270,7 @@ export class Editor {
     };
     const starter = this.registry.build(this.scene, this.physics, this.materials, starterProps, this.shadowGen);
     const floorMesh = starter.meshes[0];
-    const starterInstance: Instance = { id: 'starter-floor', type: 'floor', props: starterProps, mesh: floorMesh, body: starter.body };
+    const starterInstance: Instance = { id: 'starter-floor', type: 'floor', props: starterProps, mesh: floorMesh, body: starter.body, buildMeshScale: meshScale(floorMesh) };
     this.syncHitbox(starterInstance);
     this.instances.push(starterInstance);
     this.select(this.instances[0]);
@@ -323,6 +309,9 @@ export class Editor {
       }
     });
     window.addEventListener('blur', () => this.keys.clear());
+    // A release outside the viewport can miss Babylon's drag-end observable.
+    window.addEventListener('pointerup', () => this.finishGizmoDrag());
+    window.addEventListener('pointercancel', () => this.finishGizmoDrag());
   }
 
   /** Track a key press unless the user is typing in a field. */
@@ -647,7 +636,7 @@ export class Editor {
     if (type === 'wallrun_panel') props.wallRun = true;
     const result = this.registry.build(this.scene, this.physics, this.materials, props, this.shadowGen);
     const mesh = result.meshes[0];
-    const instance: Instance = { id, type, props, mesh, body: result.body };
+    const instance: Instance = { id, type, props, mesh, body: result.body, buildMeshScale: meshScale(mesh) };
     this.syncHitbox(instance);
     this.instances.push(instance);
     this.select(instance);
@@ -732,6 +721,67 @@ export class Editor {
     return [factor(0, m.scaling.x), factor(1, m.scaling.y), factor(2, m.scaling.z)];
   }
 
+  /** Euler angles from whichever representation Babylon is actually using. */
+  private meshRotation(m: BABYLON.Mesh): [number, number, number] {
+    const q = m.rotationQuaternion;
+    if (q) {
+      const e = q.toEulerAngles();
+      return [e.x, e.y, e.z];
+    }
+    return [m.rotation.x, m.rotation.y, m.rotation.z];
+  }
+
+  /** Commit an active gizmo drag into the component data. */
+  private finishGizmoDrag() {
+    const target = this.dragTarget;
+    if (!target) return;
+    const m = target.mesh as BABYLON.Mesh;
+    const rotation = this.meshRotation(m);
+    target.props.position = [m.position.x, m.position.y, m.position.z];
+    target.props.rotation = rotation;
+    if (target.type === 'playerSpawn' || target.type === 'enemySpawn') {
+      target.props.facing = Math.round((rotation[1] * 180 / Math.PI) * 10) / 10;
+    }
+    // Moving/rotating must never change size. Only the scale gizmo folds its
+    // delta into props.scale.
+    target.props.scale = this.dragMode === 'scale'
+      ? this.draggedScale(m)
+      : [...this.dragStartScale];
+    this.dragTarget = null;
+    this.dragMode = null;
+    this.rebuild(target);
+    this.hl.removeAllMeshes();
+    this.hl.addMesh(target.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
+    this.refreshInspector();
+  }
+
+  /**
+   * Make sure what the user SEES is what gets saved. A drag released outside
+   * the canvas can miss Babylon's end observable; this catches the leftover
+   * mesh scaling and folds it into the data before any export.
+   */
+  private commitAllTransforms() {
+    this.finishGizmoDrag();
+    for (const instance of this.instances) {
+      const m = instance.mesh as BABYLON.Mesh;
+      const ref = instance.buildMeshScale;
+      const s = m.scaling;
+      const dirty = Math.abs(s.x - ref[0]) > 1e-5
+        || Math.abs(s.y - ref[1]) > 1e-5
+        || Math.abs(s.z - ref[2]) > 1e-5;
+      if (!dirty) continue;
+      instance.props.scale = [
+        Math.max(0.01, instance.props.scale[0] * s.x / (Math.abs(ref[0]) > 1e-6 ? ref[0] : 1)),
+        Math.max(0.01, instance.props.scale[1] * s.y / (Math.abs(ref[1]) > 1e-6 ? ref[1] : 1)),
+        Math.max(0.01, instance.props.scale[2] * s.z / (Math.abs(ref[2]) > 1e-6 ? ref[2] : 1)),
+      ];
+      const rotation = this.meshRotation(m);
+      instance.props.position = [m.position.x, m.position.y, m.position.z];
+      instance.props.rotation = rotation;
+      this.rebuild(instance);
+    }
+  }
+
   /**
    * Live-follow the mesh during a gizmo drag. Translation and rotation only
    * touch position/orientation; the size is left completely alone unless the
@@ -793,6 +843,7 @@ export class Editor {
     const result = this.registry.build(this.scene, this.physics, this.materials, instance.props, this.shadowGen);
     instance.mesh = result.meshes[0];
     instance.body = result.body;
+    instance.buildMeshScale = meshScale(instance.mesh);
     this.syncHitbox(instance);
     if (this.selected === instance) {
       this.hl.addMesh(instance.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
@@ -843,6 +894,7 @@ export class Editor {
       props,
       mesh: result.meshes[0],
       body: result.body,
+      buildMeshScale: meshScale(result.meshes[0]),
     };
     this.syncHitbox(copy);
     this.instances.push(copy);
@@ -1160,6 +1212,7 @@ export class Editor {
         props: JSON.parse(JSON.stringify(props)),
         mesh: result.meshes[0],
         body: result.body,
+        buildMeshScale: meshScale(result.meshes[0]),
       };
       this.syncHitbox(instance);
       this.instances.push(instance);
@@ -1172,6 +1225,9 @@ export class Editor {
   }
 
   private serialize(): LevelData {
+    // The visible scene is the source of truth. Fold in any drag that never
+    // got a clean end event before writing the level out.
+    this.commitAllTransforms();
     // Every placed instance (including markers) is exported as a component so
     // that the level round-trips through the editor 1:1. The game loader
     // reads spawn / anchor / enemy data from the component builds themselves.
