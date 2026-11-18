@@ -40,12 +40,18 @@ export class Editor {
   private readonly elStatus: HTMLElement;
   private readonly elPalette: HTMLElement;
   private readonly elInspector: HTMLElement;
+  /** Toolbar toggle: only tagged surfaces may be wall-run. */
+  private readonly elWallRunStrict: HTMLInputElement;
+  /** Toolbar toggle: only tagged surfaces may be mantled. */
+  private readonly elMantleStrict: HTMLInputElement;
 
   // Input / camera
   private pointerDown = false;
   private dragButton = -1;
   private dragObject = false;
   private lastPointer = { x: 0, y: 0 };
+  /** Keyboard navigation state for WASD/QE viewport movement. */
+  private keys = new Set<string>();
   private alpha = 0;
   private beta = 1.1;
   private radius = 26;
@@ -57,6 +63,8 @@ export class Editor {
     this.elStatus = document.getElementById('status')!;
     this.elPalette = document.getElementById('palette')!;
     this.elInspector = document.getElementById('inspector')!;
+    this.elWallRunStrict = document.getElementById('wallrun-strict') as HTMLInputElement;
+    this.elMantleStrict = document.getElementById('mantle-strict') as HTMLInputElement;
     this.registry = buildDefaultRegistry();
 
     this.bindUI();
@@ -150,7 +158,9 @@ export class Editor {
     this.counters.set('floor', 1);
 
     this.engine.runRenderLoop(() => {
+      const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
       this.updateCamera();
+      this.updateKeyboardCamera(dt);
       this.scene.render();
     });
 
@@ -159,6 +169,54 @@ export class Editor {
     this.canvas.addEventListener('pointerup', () => this.onPointerUp());
     this.canvas.addEventListener('pointerleave', () => this.onPointerUp());
     this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+
+    // WASD/QE navigation of the viewport, Unity style.
+    window.addEventListener('keydown', (e) => this.onKeyDown(e));
+    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('blur', () => this.keys.clear());
+  }
+
+  /** Track a key press unless the user is typing in a field. */
+  private onKeyDown(e: KeyboardEvent) {
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
+      return;
+    }
+    this.keys.add(e.code);
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'KeyR', 'KeyF'].includes(e.code)) {
+      e.preventDefault();
+    }
+  }
+
+  /**
+   * Move the editor camera with WASD (and Q/E or R/F for up/down).
+   *
+   * W/S push the view forward and backward along the camera's ground
+   * direction, A/D strafe it, and Q/E (R/F) raise and lower the focus point.
+   * The speed scales with the zoom level so it feels the same at any distance.
+   */
+  private updateKeyboardCamera(dt: number) {
+    if (this.keys.size === 0) return;
+    const speed = Math.max(2, this.radius * 0.6) * dt;
+
+    const forward = new BABYLON.Vector3(
+      Math.sin(this.alpha),
+      0,
+      Math.cos(this.alpha),
+    );
+    const right = new BABYLON.Vector3(forward.z, 0, -forward.x);
+
+    const move = BABYLON.Vector3.Zero();
+    if (this.keys.has('KeyW')) move.addInPlace(forward.scale(1));
+    if (this.keys.has('KeyS')) move.addInPlace(forward.scale(-1));
+    if (this.keys.has('KeyD')) move.addInPlace(right.scale(1));
+    if (this.keys.has('KeyA')) move.addInPlace(right.scale(-1));
+    if (this.keys.has('KeyE') || this.keys.has('KeyR')) move.y += 1;
+    if (this.keys.has('KeyQ') || this.keys.has('KeyF')) move.y -= 1;
+
+    if (move.lengthSquared() === 0) return;
+    move.normalize().scaleInPlace(speed);
+    this.target.addInPlace(move);
   }
 
   private updateCamera() {
@@ -329,6 +387,8 @@ export class Editor {
       scale: [dx, dy, dz],
       collide: true,
     };
+    // The wall-run panel is a parkour surface by default.
+    if (type === 'wallrun_panel') props.wallRun = true;
     const result = this.registry.build(this.scene, this.physics, this.materials, props, this.shadowGen);
     const mesh = result.meshes[0];
     const instance: Instance = { id, type, props, mesh, body: result.body };
@@ -372,7 +432,11 @@ export class Editor {
       instance.props.rotation[2],
     ));
     const mat = new BABYLON.StandardMaterial(`hitbox-mat-${instance.id}`, this.scene);
-    mat.emissiveColor = new BABYLON.Color3(0.15, 1, 0.25);
+    // Parkour triggers are cyan, ordinary colliders are lime.
+    const tagged = instance.props.wallRun === true;
+    mat.emissiveColor = tagged
+      ? new BABYLON.Color3(0.2, 0.85, 1)
+      : new BABYLON.Color3(0.15, 1, 0.25);
     mat.wireframe = true;
     mat.disableLighting = true;
     box.material = mat;
@@ -513,6 +577,42 @@ export class Editor {
     collide.appendChild(cbl);
     this.elInspector.appendChild(collide);
 
+    // --- Parkour trigger: wall-run -----------------------------------------
+    const wallRunField = document.createElement('div');
+    wallRunField.className = 'field check';
+    const wrCb = document.createElement('input');
+    wrCb.type = 'checkbox';
+    const isWallrunPanel = i.type === 'wallrun_panel';
+    wrCb.checked = i.props.wallRun ?? isWallrunPanel;
+    wrCb.addEventListener('change', () => {
+      i.props.wallRun = wrCb.checked;
+      this.rebuild(i);
+      this.setStatus(wrCb.checked
+        ? 'Wall-run enabled on this surface'
+        : 'Wall-run disabled on this surface');
+    });
+    wallRunField.appendChild(wrCb);
+    const wrLabel = document.createElement('label');
+    wrLabel.textContent = 'Wall-run (parkour trigger)';
+    wallRunField.appendChild(wrLabel);
+    this.elInspector.appendChild(wallRunField);
+
+    // --- Parkour trigger: mantle -------------------------------------------
+    const mantleField = document.createElement('div');
+    mantleField.className = 'field check';
+    const mCb = document.createElement('input');
+    mCb.type = 'checkbox';
+    mCb.checked = i.props.mantle === true;
+    mCb.addEventListener('change', () => {
+      i.props.mantle = mCb.checked;
+      this.rebuild(i);
+    });
+    mantleField.appendChild(mCb);
+    const mLabel = document.createElement('label');
+    mLabel.textContent = 'Mantle (ledge grab)';
+    mantleField.appendChild(mLabel);
+    this.elInspector.appendChild(mantleField);
+
     const del = document.createElement('button');
     del.className = 'btn-delete';
     del.textContent = 'Delete';
@@ -630,6 +730,8 @@ export class Editor {
   private fromData(data: LevelData) {
     this.newLevel();
     this.elLevelName.value = data.name;
+    this.elWallRunStrict.checked = data.parkour?.wallRunStrict === true;
+    this.elMantleStrict.checked = data.parkour?.mantleStrict === true;
     for (const props of data.components) {
       const instId = props.id;
       const result = this.registry.build(this.scene, this.physics, this.materials, props, this.shadowGen);
@@ -671,6 +773,10 @@ export class Editor {
       grappleAnchors: [],
       enemySpawns: [],
       lights: [],
+      parkour: {
+        wallRunStrict: this.elWallRunStrict.checked,
+        mantleStrict: this.elMantleStrict.checked,
+      },
     };
   }
 

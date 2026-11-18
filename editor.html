@@ -21,6 +21,10 @@
       <button id="btn-play" class="primary">Play in Game</button>
     </div>
     <div class="toolbar-group">
+      <label class="check"><input id="wallrun-strict" type="checkbox"> Wall-run only on tagged surfaces</label>
+      <label class="check"><input id="mantle-strict" type="checkbox"> Mantle only on tagged surfaces</label>
+    </div>
+    <div class="toolbar-group">
       <span id="status" class="status">Ready</span>
     </div>
   </div>
@@ -33,7 +37,7 @@
 
     <div class="viewport" id="viewport">
       <canvas id="editor-canvas"></canvas>
-      <div class="view-hint">Left-click to select &bull; Left-drag to move &bull; Right-drag to pan &bull; Scroll to zoom</div>
+      <div class="view-hint">Left-click to select &bull; Left-drag to move &bull; Right-drag to pan &bull; Scroll to zoom &bull; WASD to fly &bull; Q/E for up/down</div>
     </div>
 
     <aside class="panel panel-right">

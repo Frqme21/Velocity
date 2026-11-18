@@ -20,6 +20,15 @@ export interface LoadedLevel {
   layoutOverlaps: string[];
   /** Colliders that may be wall-run (none by default for JSON levels). */
   wallRunColliders: number[];
+  /**
+   * True when the level explicitly tags its wall-run surfaces. Only tagged
+   * colliders can then be wall-run; untagged levels allow any wall.
+   */
+  wallRunStrict: boolean;
+  /** Colliders that may be mantled (ledge grab). */
+  mantleColliders: number[];
+  /** True when only tagged colliders may be mantled. */
+  mantleStrict: boolean;
   update(dt: number): void;
   dispose(): void;
 }
@@ -44,6 +53,8 @@ export function loadLevel(
   const lights: BABYLON.Light[] = [];
   const grappleAnchors: { position: BABYLON.Vector3; landing: BABYLON.Vector3 }[] = [];
   const enemySpawns: BABYLON.Vector3[] = [];
+  const wallRunColliders: number[] = [];
+  const mantleColliders: number[] = [];
 
   const spawn = new BABYLON.Vector3(data.spawn[0], Math.max(data.spawn[1], 0.92), data.spawn[2]);
   const gs = data.gameplaySpawn ?? data.spawn;
@@ -58,6 +69,14 @@ export function loadLevel(
     }
     if (result.body) {
       bodies.push(result.body);
+      // Parkour triggers: only colliders explicitly tagged by the editor are
+      // registered as wall-run surfaces.
+      if (props.wallRun && result.colliderHandle !== undefined) {
+        wallRunColliders.push(result.colliderHandle);
+      }
+      if (props.mantle && result.colliderHandle !== undefined) {
+        mantleColliders.push(result.colliderHandle);
+      }
       const pos = result.body.translation();
       console.log(`[loadLevel] collider: ${props.id} type=${props.type} pos=(${pos.x.toFixed(2)},${pos.y.toFixed(2)},${pos.z.toFixed(2)}) scale=[${props.scale.join(',')}] collide=${props.collide}`);
       // Debug wireframe: show the ACTUAL collider bounds in lime green.
@@ -76,7 +95,9 @@ export function loadLevel(
       dbg.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
       dbg.rotation.copyFrom(new BABYLON.Vector3(props.rotation[0], props.rotation[1], props.rotation[2]));
       const dbgMat = new BABYLON.StandardMaterial(`dbg-mat-${props.id}`, scene);
-      dbgMat.emissiveColor = new BABYLON.Color3(0, 1, 0);
+      dbgMat.emissiveColor = props.wallRun
+        ? new BABYLON.Color3(0.2, 0.85, 1)
+        : new BABYLON.Color3(0, 1, 0);
       dbgMat.wireframe = true;
       dbgMat.disableLighting = true;
       dbg.material = dbgMat;
@@ -125,7 +146,10 @@ export function loadLevel(
     bodies,
     lights,
     layoutOverlaps: [],
-    wallRunColliders: [],
+    wallRunColliders,
+    wallRunStrict: data.parkour?.wallRunStrict === true,
+    mantleColliders,
+    mantleStrict: data.parkour?.mantleStrict === true,
     update(_dt: number) {
       // No per-frame simulation for static levels by default. Components that
       // need animation can hook in here later.

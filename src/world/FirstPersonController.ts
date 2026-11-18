@@ -186,6 +186,14 @@ export class FirstPersonController {
   private wallSideSign = 0;
   private wallEntryRising = false;
   private cameraRoll = 0;
+  /** Collider handles explicitly tagged as wall-run surfaces by the level. */
+  private wallRunTriggers: number[] = [];
+  /** When true, only tagged colliders may be wall-run. */
+  private wallRunStrict = false;
+  /** Collider handles explicitly tagged as mantle (ledge grab) surfaces. */
+  private mantleTriggers: number[] = [];
+  /** When true, only tagged colliders may be mantled. */
+  private mantleStrict = false;
 
   private mantle: MantleState = {
     active: false,
@@ -286,6 +294,25 @@ export class FirstPersonController {
     this.charController.setMinSlopeSlideAngle((35 * Math.PI) / 180);
 
     this.input.onMouseDelta = (dx, dy) => this.applyLookDelta(dx, dy);
+  }
+
+  /**
+   * Register the level's parkour triggers.
+   *
+   * @param handles Collider handles tagged as wall-run surfaces.
+   * @param strict  When true, only tagged colliders can be wall-run. Levels
+   *                that tag nothing pass an empty list and keep the old
+   *                behaviour where any wall can be run.
+   */
+  setParkourTriggers(handles: number[], strict: boolean) {
+    this.wallRunTriggers = handles.slice();
+    this.wallRunStrict = strict;
+  }
+
+  /** Register the level's mantle (ledge grab) triggers. */
+  setMantleTriggers(handles: number[], strict: boolean) {
+    this.mantleTriggers = handles.slice();
+    this.mantleStrict = strict;
   }
 
   /**
@@ -1008,7 +1035,7 @@ export class FirstPersonController {
     const rayDir = { x: dir.x, y: 0, z: dir.z };
 
     const castForward = (y: number, distance: number) =>
-      this.world.castRay(
+      this.world.castRayAndGetNormal(
         new RAPIER.Ray({ x: position.x, y, z: position.z }, rayDir),
         distance,
         true,
@@ -1041,6 +1068,14 @@ export class FirstPersonController {
       this.body,
     );
     if (!surfaceHit || surfaceHit.normal.y < 0.72) return false;
+
+    // Parkour trigger: when the level restricts mantling to tagged ledges,
+    // either the grabbed wall or the ledge on top has to be tagged.
+    if (this.mantleStrict
+      && !this.mantleTriggers.includes(wallHit.collider.handle)
+      && !this.mantleTriggers.includes(surfaceHit.collider.handle)) {
+      return false;
+    }
 
     const ledgeSurfaceY = surfaceOrigin.y - surfaceHit.timeOfImpact;
     const targetBodyY = ledgeSurfaceY + standOffset;
@@ -1369,6 +1404,9 @@ export class FirstPersonController {
 
       const colliderHandle = hit.collider.handle;
       if (colliderHandle === this.lastWallColliderHandle && this.wallRunCooldown > 0) return;
+      // Parkour triggers: when the level tags its wall-run surfaces, only
+      // those colliders may start a wall run.
+      if (this.wallRunStrict && !this.wallRunTriggers.includes(colliderHandle)) return;
 
       const normal = new BABYLON.Vector3(hit.normal.x, 0, hit.normal.z).normalize();
       const tangent = BABYLON.Vector3.Cross(normal, BABYLON.Axis.Y).normalize();

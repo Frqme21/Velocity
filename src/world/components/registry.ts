@@ -50,6 +50,7 @@ export type ComponentType =
   | 'grappleAnchor'
   | 'enemySpawn'
   | 'playerSpawn'
+  | 'wallrun_panel'
   | 'light';
 
 export interface ComponentProps {
@@ -63,12 +64,21 @@ export interface ComponentProps {
   uScale?: number;
   vScale?: number;
   collide?: boolean;
+  /**
+   * Parkour trigger: this surface can be wall-run. Tagged colliders are
+   * collected by the level loader and handed to the player controller.
+   */
+  wallRun?: boolean;
+  /** Parkour trigger: this surface can be mantled (ledge grab). */
+  mantle?: boolean;
 }
 
 export interface ComponentBuildResult {
   meshes: BABYLON.AbstractMesh[];
   body?: RAPIER.RigidBody;
   collider?: RAPIER.Collider;
+  /** Rapier collider handle, used to tag parkour surfaces. */
+  colliderHandle?: number;
   anchor?: GrappleAnchorPoint;
   spawn?: BABYLON.Vector3;
   light?: BABYLON.Light;
@@ -99,6 +109,16 @@ export interface LevelData {
   grappleAnchors: Array<{ position: [number, number, number]; landing: [number, number, number] }>;
   enemySpawns: [number, number, number][];
   lights?: Array<{ position: [number, number, number]; intensity?: number }>;
+  /**
+   * Level-wide parkour settings.
+   *
+   * `wallRunStrict` restricts wall runs to the surfaces tagged with
+   * `"wallRun": true`. When it is false (the default) any wall can be run.
+   */
+  parkour?: {
+    wallRunStrict?: boolean;
+    mantleStrict?: boolean;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -277,6 +297,7 @@ export function buildDefaultRegistry(): ComponentRegistry {
           const c = addStaticCollider(physics, props.position, props.scale, props.rotation);
           result.body = c.body;
           result.collider = c.collider;
+          result.colliderHandle = c.collider.handle;
         }
         return result;
       },
@@ -300,6 +321,35 @@ export function buildDefaultRegistry(): ComponentRegistry {
   surface('white_tiles', 'White Tiles', 'Floors', [16, 0.4, 16], 'white_tiles', [4, 4]);
   surface('dirty_tiles', 'Dirty Tiles', 'Floors', [16, 0.4, 16], 'dirty_tiles', [4, 4]);
   surface('rooftop_gravel', 'Rooftop Gravel', 'Floors', [16, 0.4, 16], 'rooftop_gravel', [4, 4]);
+
+  // --- Wall-run panel -------------------------------------------------------
+  // A tall, thin surface that is a parkour trigger by default: the player can
+  // wall-run along it. The editor exposes a "Wall-run" checkbox on every
+  // component, so any wall can be tagged the same way.
+  registry.register({
+    type: 'wallrun_panel',
+    label: 'Wall-run Panel',
+    category: 'Geometry',
+    defaultScale: [0.7, 12, 10],
+    defaultMaterial: 'corrugated_metal',
+    build: (scene, physics, reg, props, shadowGenerator) => {
+      const meshes: BABYLON.AbstractMesh[] = [];
+      const mesh = BABYLON.MeshBuilder.CreateBox(props.id, {
+        width: props.scale[0], height: props.scale[1], depth: props.scale[2],
+      }, scene);
+      configureMesh(mesh, props, materialFor(reg, props, defWallrun), shadowGenerator);
+      meshes.push(mesh);
+      const result: ComponentBuildResult = { meshes };
+      if (props.collide !== false) {
+        const c = addStaticCollider(physics, props.position, props.scale, props.rotation);
+        result.body = c.body;
+        result.collider = c.collider;
+        result.colliderHandle = c.collider.handle;
+      }
+      return result;
+    },
+  });
+  const defWallrun = registry.get('wallrun_panel')!;
 
   // --- Box / ramp ----------------------------------------------------------
   registry.register({
@@ -385,6 +435,7 @@ export function buildDefaultRegistry(): ComponentRegistry {
           const c = addStaticCollider(physics, props.position, props.scale, props.rotation);
           result.body = c.body;
           result.collider = c.collider;
+          result.colliderHandle = c.collider.handle;
         }
         return result;
       },
@@ -433,6 +484,7 @@ export function buildDefaultRegistry(): ComponentRegistry {
           );
           result.body = c.body;
           result.collider = c.collider;
+          result.colliderHandle = c.collider.handle;
         }
         return result;
       },

@@ -153,6 +153,17 @@ export class Game {
       this.controller.setPose(this.world.gameplaySpawn, 0, 0);
     }
 
+    // Parkour triggers: JSON levels tag their wall-run surfaces in the
+    // editor. The hand-authored level keeps the old "any wall" behaviour.
+    this.controller.setParkourTriggers(
+      this.world.wallRunColliders,
+      this.world.wallRunStrict,
+    );
+    this.controller.setMantleTriggers(
+      this.world.mantleColliders,
+      this.world.mantleStrict,
+    );
+
     this.hud = new HUD(document.getElementById('hud')!);
 
     this.grappler = new Grappler(

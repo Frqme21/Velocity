@@ -23,6 +23,14 @@ export interface FirstLevelWorld extends GrayboxWorld {
    * the level is inert, so the camera never tilts by accident.
    */
   wallRunColliders: number[];
+  /**
+   * The hand-authored level keeps the original behaviour where a wall run can
+   * start on any wall; the tagged list is kept for reference and tooling.
+   */
+  wallRunStrict: boolean;
+  /** Colliders that may be mantled (the hand-authored level keeps it open). */
+  mantleColliders: number[];
+  mantleStrict: boolean;
 }
 
 /** Body centre heights for a floor whose top surface is `top`. */
@@ -334,6 +342,9 @@ export function createFirstLevel(
     killY: -6,
     layoutOverlaps,
     wallRunColliders,
+    wallRunStrict: false,
+    mantleColliders: [],
+    mantleStrict: false,
     // The guards: the intro victim first, then two further down the route.
     enemySpawns: [
       new BABYLON.Vector3(0, 0, 12),
