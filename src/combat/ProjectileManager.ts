@@ -4,6 +4,16 @@ import { COMBAT_CONFIG } from '../config/combat';
 import { SparkBurst } from './SparkBurst';
 
 /**
+ * How far a bolt may get from the player before it is culled, squared.
+ *
+ * Generous on purpose: bolts live for a few seconds and travel quickly, so
+ * this is only a safety net for shots that miss into the void. It must not be
+ * tied to fixed world coordinates - custom levels place enemies far from the
+ * origin, and a tight box would delete their bolts the moment they spawn.
+ */
+const MAX_BOLT_DISTANCE_SQ = 300 * 300;
+
+/**
  * A single energy bolt in flight.
  *
  * Bolts are plain data plus a mesh - they travel in a straight line and are
@@ -233,11 +243,18 @@ export class ProjectileManager {
         continue;
       }
 
-      // A bolt that flies past everything is gone.
+      // A bolt that flies past everything is gone. These limits are relative
+      // to the player, not fixed world coordinates: custom levels can place
+      // enemies anywhere, and a hard-coded +/-60 box used to delete a bolt on
+      // its first frame when the shooter stood outside that box (the shot
+      // sound played, but the projectile never rendered).
+      const distanceFromPlayerSq = BABYLON.Vector3.DistanceSquared(
+        bolt.position,
+        this.playerPosition,
+      );
       const gone = bolt.life <= 0
-        || bolt.position.y < -8
-        || Math.abs(bolt.position.x) > 60
-        || Math.abs(bolt.position.z) > 60;
+        || bolt.position.y < this.playerPosition.y - 60
+        || distanceFromPlayerSq > MAX_BOLT_DISTANCE_SQ;
       if (gone) {
         this.removeBolt(i);
         continue;
