@@ -109,39 +109,45 @@ export class Game {
     // ?level=name loads a JSON-built level; otherwise the hand-authored
     // first level is used. JSON levels skip the scripted intro and drop the
     // player straight into gameplay at gameplaySpawn.
-    const levelName = new URLSearchParams(window.location.search).get('level');
+    const params = new URLSearchParams(window.location.search);
+    const levelName = params.get('level');
+    // Play in Game tags the URL so the editor's just-saved copy wins over any
+    // older exported JSON sitting on disk. A plain ?level=name still prefers
+    // the on-disk level, with localStorage only as a fallback.
+    const fromEditor = params.get('fromEditor') === '1';
     if (levelName) {
       let data: unknown = null;
-      // Try every place a level JSON can live. Disk files always win over the
-      // browser save, so deleting/moving a file cannot be masked by an old
-      // localStorage copy (unless there is no disk copy at all).
-      for (const url of [
-        `/src/world/levels/${levelName}.json`,
-        `/levels/${levelName}.json`,
-      ]) {
+      const storedRaw = localStorage.getItem(`velocity-level-${levelName}`);
+      let stored: unknown = null;
+      if (storedRaw) {
         try {
-          const response = await fetch(url);
-          if (response.ok) {
-            data = await response.json();
-            break;
-          }
+          stored = JSON.parse(storedRaw);
         } catch {
-          // Missing path or offline — try the next one.
+          stored = null;
         }
       }
-      // Fallback: level saved from the editor via localStorage.
+      if (fromEditor && stored !== null) {
+        data = stored;
+      }
       if (data === null) {
-        const stored = localStorage.getItem(`velocity-level-${levelName}`);
-        if (stored) {
+        for (const url of [
+          `/src/world/levels/${levelName}.json`,
+          `/levels/${levelName}.json`,
+        ]) {
           try {
-            data = JSON.parse(stored);
+            const response = await fetch(url);
+            if (response.ok) {
+              data = await response.json();
+              break;
+            }
           } catch {
-            data = null;
+            // Missing path or offline — try the next one.
           }
         }
       }
+      if (data === null && stored !== null) data = stored;
       if (data === null) {
-        throw new Error(`Level not found: ${levelName}.json (checked src/world/levels, /levels and browser save)`);
+        throw new Error(`Level not found: ${levelName}.json (checked browser save, src/world/levels and /levels)`);
       }
       this.world = loadLevel(data as never, this.scene, this.rapierWorld, shadowGenerator);
       this.customLevel = true;

@@ -1220,11 +1220,12 @@ export class Editor {
 
   private playLevel() {
     const name = this.elLevelName.value || 'untitled';
-    // Persist so the game can load it via ?level=name (localStorage fallback).
+    // Persist the CURRENT editor state. fromEditor=1 tells the game to use
+    // this copy instead of an older exported JSON file with the same name.
     localStorage.setItem(`velocity-level-${name}`, JSON.stringify(this.serialize(), null, 2));
     this.exportLevel();
     this.setStatus(`Saved "${name}" — launching game...`);
-    window.location.href = `/?level=${encodeURIComponent(name)}`;
+    window.location.href = `/?level=${encodeURIComponent(name)}&fromEditor=1`;
   }
 
   /** Called by `newLevel` before wiping; exposed for tests. */
