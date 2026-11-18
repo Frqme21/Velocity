@@ -351,6 +351,8 @@ export function createFirstLevel(
       new BABYLON.Vector3(6, 0, 38),
       new BABYLON.Vector3(0, 0, 72),
     ],
+    enemyFacings: [0, 0, 0],
+    playerFacing: 0,
     update: (dt) => {
       for (const animate of animated) animate(dt);
     },

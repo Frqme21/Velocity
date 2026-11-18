@@ -112,6 +112,7 @@ export class PistolEnemy {
     spawnPosition: BABYLON.Vector3,
     index: number,
     playerBody: RAPIER.RigidBody,
+    facing = 0,
   ) {
     this.scene = scene;
     this.world = world;
@@ -121,6 +122,9 @@ export class PistolEnemy {
 
     this.root = new BABYLON.TransformNode(`enemy-${index}`, scene);
     this.root.position.copyFrom(spawnPosition);
+    // Spawn Marker facing (degrees in JSON → radians here) sets the initial
+    // direction the guard looks. AI turns it afterwards while tracking.
+    this.root.rotation.y = facing;
 
     if (model.hasModel) {
       this.buildFromModel(model, index);

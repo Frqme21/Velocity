@@ -13,6 +13,10 @@ export interface LoadedLevel {
   meshes: BABYLON.AbstractMesh[];
   grappleAnchors: { position: BABYLON.Vector3; landing: BABYLON.Vector3 }[];
   enemySpawns: BABYLON.Vector3[];
+  /** Initial yaw (radians) for each enemy spawn, in the same order. */
+  enemyFacings: number[];
+  /** Initial yaw (radians) for the player spawn marker. */
+  playerFacing: number;
   /** Disposable static bodies/colliders created for collidable components. */
   bodies: RAPIER.RigidBody[];
   lights: BABYLON.Light[];
@@ -53,6 +57,8 @@ export function loadLevel(
   const lights: BABYLON.Light[] = [];
   const grappleAnchors: { position: BABYLON.Vector3; landing: BABYLON.Vector3 }[] = [];
   const enemySpawns: BABYLON.Vector3[] = [];
+  const enemyFacings: number[] = [];
+  let playerFacing = 0;
   const wallRunColliders: number[] = [];
   const mantleColliders: number[] = [];
 
@@ -108,13 +114,17 @@ export function loadLevel(
     // Only an ENEMY Spawn marker creates an enemy. A Player Spawn marker
     // previously fell into this branch too, so every player marker spawned a
     // stray guard. Player markers instead set the gameplay spawn below.
-    if (result.spawn && props.type === 'enemySpawn') enemySpawns.push(result.spawn);
+    if (result.spawn && props.type === 'enemySpawn') {
+      enemySpawns.push(result.spawn);
+      enemyFacings.push(((props.facing ?? 0) * Math.PI) / 180);
+    }
     if (result.spawn && props.type === 'playerSpawn') {
       playerMarker = new BABYLON.Vector3(
         result.spawn.x,
         Math.max(result.spawn.y, 0.92),
         result.spawn.z,
       );
+      playerFacing = ((props.facing ?? 0) * Math.PI) / 180;
     }
     if (result.light) lights.push(result.light);
   }
@@ -135,6 +145,7 @@ export function loadLevel(
   // --- Explicit enemy spawns -----------------------------------------------
   for (const s of data.enemySpawns) {
     enemySpawns.push(new BABYLON.Vector3(s[0], s[1], s[2]));
+    enemyFacings.push(0); // explicit array entries have no facing data
   }
 
   // --- Lights ---------------------------------------------------------------
@@ -158,6 +169,8 @@ export function loadLevel(
     meshes,
     grappleAnchors,
     enemySpawns,
+    enemyFacings,
+    playerFacing,
     bodies,
     lights,
     layoutOverlaps: [],

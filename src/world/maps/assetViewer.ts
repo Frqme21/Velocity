@@ -207,6 +207,8 @@ export function createAssetViewer(
     meshes,
     grappleAnchors,
     enemySpawns: [],
+    enemyFacings: [],
+    playerFacing: 0,
     update: (dt: number) => {
       for (const animate of animated) animate(dt);
     },

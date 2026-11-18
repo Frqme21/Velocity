@@ -71,6 +71,8 @@ export interface ComponentProps {
   wallRun?: boolean;
   /** Parkour trigger: this surface can be mantled (ledge grab). */
   mantle?: boolean;
+  /** Spawn markers: initial facing direction in DEGREES around the Y axis. */
+  facing?: number;
 }
 
 export interface ComponentBuildResult {
@@ -81,6 +83,8 @@ export interface ComponentBuildResult {
   colliderHandle?: number;
   anchor?: GrappleAnchorPoint;
   spawn?: BABYLON.Vector3;
+  /** Facing (degrees) carried by spawn markers. */
+  facing?: number;
   light?: BABYLON.Light;
 }
 
@@ -539,15 +543,26 @@ export function buildDefaultRegistry(): ComponentRegistry {
     defaultScale: [1, 1, 1],
     build: (scene, physics, reg, props, shadowGenerator) => {
       const meshes: BABYLON.AbstractMesh[] = [];
+      const facing = props.facing ?? 0;
       const marker = BABYLON.MeshBuilder.CreateSphere(props.id, { diameter: 0.6, segments: 12 }, scene);
       marker.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
+      marker.rotation.y = facing * Math.PI / 180;
       marker.material = reg.getPlain('#ff7bd0');
       marker.receiveShadows = true;
       shadowGenerator?.addShadowCaster(marker);
       meshes.push(marker);
+      // A small nose makes the chosen facing direction visible in the editor.
+      const nose = BABYLON.MeshBuilder.CreateBox(`${props.id}-facing`, {
+        width: 0.14, height: 0.14, depth: 0.7,
+      }, scene);
+      nose.position.set(0, 0, 0.5);
+      nose.parent = marker;
+      nose.material = reg.getPlain('#ffd0eb');
+      meshes.push(nose);
       return {
         meshes,
         spawn: new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]),
+        facing,
       };
     },
   });
@@ -559,15 +574,26 @@ export function buildDefaultRegistry(): ComponentRegistry {
     defaultScale: [1, 1, 1],
     build: (scene, physics, reg, props, shadowGenerator) => {
       const meshes: BABYLON.AbstractMesh[] = [];
+      const facing = props.facing ?? 0;
       const marker = BABYLON.MeshBuilder.CreateSphere(props.id, { diameter: 0.7, segments: 12 }, scene);
       marker.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
+      marker.rotation.y = facing * Math.PI / 180;
       marker.material = reg.getPlain('#7ef4ff');
       marker.receiveShadows = true;
       shadowGenerator?.addShadowCaster(marker);
       meshes.push(marker);
+      // The cyan nose points where the player will look on spawn.
+      const nose = BABYLON.MeshBuilder.CreateBox(`${props.id}-facing`, {
+        width: 0.14, height: 0.14, depth: 0.7,
+      }, scene);
+      nose.position.set(0, 0, 0.55);
+      nose.parent = marker;
+      nose.material = reg.getPlain('#d9fbff');
+      meshes.push(nose);
       return {
         meshes,
         spawn: new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]),
+        facing,
       };
     },
   });

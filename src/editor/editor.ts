@@ -212,6 +212,11 @@ export class Editor {
       const base = this.dragStartScale;
       this.selected.props.position = [m.position.x, m.position.y, m.position.z];
       this.selected.props.rotation = [m.rotation.x, m.rotation.y, m.rotation.z];
+      // Spawn markers use facing (not rotation) as their meaningful yaw —
+      // persist a gizmo rotation so the arrow keeps pointing where you put it.
+      if (this.selected.type === 'playerSpawn' || this.selected.type === 'enemySpawn') {
+        this.selected.props.facing = Math.round((m.rotation.y * 180 / Math.PI) * 10) / 10;
+      }
       this.selected.props.scale = [
         base[0] * m.scaling.x,
         base[1] * m.scaling.y,
@@ -261,6 +266,10 @@ export class Editor {
       const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
       this.updateCamera();
       this.updateKeyboardCamera(dt);
+      // Drive the collider + wireframe straight from the mesh every frame
+      // while a gizmo is being dragged. This does not rely on gizmo event
+      // ordering and keeps the hitbox visually glued to the object.
+      if (this.gizmoDragging) this.syncBodyToMesh();
       this.scene.render();
     });
 
@@ -311,20 +320,15 @@ export class Editor {
   }
 
   /**
-   * Move the editor camera with WASD (and Q/E or R/F for up/down).
-   *
-   * W/S push the view forward and backward along the camera's ground
-   * direction, A/D strafe it, and Q/E (R/F) raise and lower the focus point.
-   * The speed scales with the zoom level so it feels the same at any distance.
-   */
-  /**
    * Ground-plane forward / right vectors derived from Babylon's ArcRotateCamera
    * position formula (camera.pure.js):
    *   offset = (r·cosα·sinβ, r·cosβ, r·sinα·sinβ)
    * so the view direction (camera → target) on the ground is
    *   forward = (-cosα, 0, -sinα)
-   * and right = cross(forward, up) = (sinα, 0, -cosα).
-   * Using this exact formula keeps WASD aligned with what you see at any angle.
+   *
+   * Babylon is LEFT-handed, so screen-right is cross(UP, forward), NOT
+   * cross(forward, UP). Verified against camera.getDirection(Axis.X):
+   * at α=0 forward = (-1,0,0) and right = (0,0,+1).
    */
   private groundBasis() {
     const forward = new BABYLON.Vector3(
@@ -333,9 +337,9 @@ export class Editor {
       -Math.sin(this.alpha),
     );
     const right = new BABYLON.Vector3(
-      -forward.z,
+      forward.z,
       0,
-      forward.x,
+      -forward.x,
     );
     return { forward, right };
   }
@@ -463,7 +467,8 @@ export class Editor {
     const forward = cam.getForwardRay().direction;
     forward.y = 0;
     forward.normalize();
-    const right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up());
+    // Left-handed: screen-right is cross(UP, forward), not the other way round.
+    const right = BABYLON.Vector3.Cross(BABYLON.Vector3.Up(), forward);
     right.normalize();
     const up = BABYLON.Vector3.Up();
     const speed = 0.005 * this.radius;
@@ -627,6 +632,12 @@ export class Editor {
     let hx = instance.props.scale[0] / 2;
     let hy = instance.props.scale[1] / 2;
     let hz = instance.props.scale[2] / 2;
+    // Ramps bake their slope into the collider quaternion while props.rotation
+    // stays (0,0,0), so read the ORIENTATION from the collider too — otherwise
+    // the wireframe shows a flat box where the real collider is sloped.
+    let rx = instance.props.rotation[0];
+    let ry = instance.props.rotation[1];
+    let rz = instance.props.rotation[2];
     try {
       const collider = instance.body.collider(0);
       const he = collider.halfExtents();
@@ -636,6 +647,11 @@ export class Editor {
         // resize the collider proportionally (works for plates/ramps too).
         instance.baseHalfExtents = { x: he.x, y: he.y, z: he.z };
         instance.baseScale = [...instance.props.scale] as [number, number, number];
+      }
+      const cq = collider.rotation();
+      if (cq) {
+        const e = new BABYLON.Quaternion(cq.x, cq.y, cq.z, cq.w).toEulerAngles();
+        rx = e.x; ry = e.y; rz = e.z;
       }
     } catch { /* fall back to props */ }
 
@@ -647,11 +663,7 @@ export class Editor {
       instance.props.position[1],
       instance.props.position[2],
     ));
-    box.rotation.copyFrom(new BABYLON.Vector3(
-      instance.props.rotation[0],
-      instance.props.rotation[1],
-      instance.props.rotation[2],
-    ));
+    box.rotation.set(rx, ry, rz);
     const mat = new BABYLON.StandardMaterial(`hitbox-mat-${instance.id}`, this.scene);
     // Parkour triggers are cyan, ordinary colliders are lime.
     const tagged = instance.props.wallRun === true;
@@ -730,6 +742,10 @@ export class Editor {
     this.syncHitbox(instance);
     if (this.selected === instance) {
       this.hl.addMesh(instance.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
+      // CRITICAL: the old mesh was disposed, so the gizmo is still attached to
+      // a dead object. Re-attach it or the next drag moves nothing (and the
+      // wireframe appears frozen).
+      this.updateGizmoAttachment();
     }
   }
 
@@ -793,6 +809,30 @@ export class Editor {
     this.elInspector.appendChild(vec3('Position', 'position'));
     this.elInspector.appendChild(vec3('Rotation', 'rotation'));
     this.elInspector.appendChild(vec3('Scale', 'scale'));
+
+    // --- Spawn facing ------------------------------------------------------
+    if (i.type === 'playerSpawn' || i.type === 'enemySpawn') {
+      this.elInspector.appendChild(this.h3('Spawn Facing'));
+      const faceField = document.createElement('div');
+      faceField.className = 'field';
+      const faceLabel = document.createElement('label');
+      faceLabel.textContent = 'Degrees (0 = +Z, 90 = +X)';
+      faceField.appendChild(faceLabel);
+      const faceInput = document.createElement('input');
+      faceInput.type = 'number';
+      faceInput.step = '5';
+      faceInput.value = String(i.props.facing ?? 0);
+      faceInput.addEventListener('input', () => {
+        const deg = parseFloat(faceInput.value);
+        if (!Number.isNaN(deg)) {
+          i.props.facing = deg;
+          this.rebuild(i);
+          this.refreshInspector();
+        }
+      });
+      faceField.appendChild(faceInput);
+      this.elInspector.appendChild(faceField);
+    }
 
     // --- Material dropdown (no typing required) ---
     const TEXTURES = [

@@ -150,7 +150,7 @@ export class Game {
     // no scripted intro cinematic for them.
     if (this.customLevel) {
       this.controller.setSpawn(this.world.gameplaySpawn);
-      this.controller.setPose(this.world.gameplaySpawn, 0, 0);
+      this.controller.setPose(this.world.gameplaySpawn, this.world.playerFacing, 0);
     }
 
     // Parkour triggers: JSON levels tag their wall-run surfaces in the
@@ -228,6 +228,7 @@ export class Game {
         this.world.enemySpawns[i],
         i,
         this.controller.rigidBody,
+        this.world.enemyFacings[i] ?? 0,
       );
       enemy.onFire = () => this.audio.play('enemy-shot');
       this.enemies.push(enemy);
@@ -555,7 +556,7 @@ export class Game {
     this.combat.respawnAll();
     this.projectiles.clear();
     this.controller.setSpawn(this.world.spawn);
-    this.controller.setPose(this.world.spawn, 0, 0);
+    this.controller.setPose(this.world.spawn, this.world.playerFacing, 0);
 
     this.hitStopTimer = 0;
     this.pendingReset = false;
@@ -572,7 +573,7 @@ export class Game {
       // Restart at the courtyard where control was handed over, not back up
       // on the rooftop beam.
       this.controller.setSpawn(this.world.gameplaySpawn);
-      this.controller.setPose(this.world.gameplaySpawn, 0, 0);
+      this.controller.setPose(this.world.gameplaySpawn, this.world.playerFacing, 0);
     }
   }
 }

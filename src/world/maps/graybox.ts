@@ -8,6 +8,10 @@ export interface GrayboxWorld {
   grappleAnchors: GrappleAnchorPoint[];
   /** Where the pistol guards stand. */
   enemySpawns: BABYLON.Vector3[];
+  /** Initial yaw (radians) for each guard, indexed like enemySpawns. */
+  enemyFacings: number[];
+  /** Initial yaw (radians) for the player spawn. */
+  playerFacing: number;
 }
 
 /** A grapple ring plus the spot its vault should land the player on. */
@@ -340,6 +344,8 @@ export function createGraybox(
     meshes,
     grappleAnchors,
     enemySpawns,
+    enemyFacings: [],
+    playerFacing: 0,
   };
 }
 
