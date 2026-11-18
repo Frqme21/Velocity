@@ -2,6 +2,7 @@ import * as BABYLON from '@babylonjs/core';
 import * as RAPIER from '@dimforge/rapier3d-compat';
 import {
   buildDefaultRegistry,
+  drawBillboardText,
   type ComponentDef,
   type ComponentRegistry,
   type ComponentType,
@@ -27,6 +28,8 @@ interface Instance {
   baseScale?: [number, number, number];
   /** Mesh scaling as built; any difference means an uncommitted visual edit. */
   buildMeshScale: [number, number, number];
+  /** Text billboard's live texture, so typing can redraw without a rebuild. */
+  textTexture?: BABYLON.DynamicTexture;
 }
 
 function meshScale(mesh: BABYLON.AbstractMesh): [number, number, number] {
@@ -634,9 +637,20 @@ export class Editor {
     };
     // The wall-run panel is a parkour surface by default.
     if (type === 'wallrun_panel') props.wallRun = true;
+    // A text billboard is signage: no collider, with starter text so it isn't
+    // blank the moment it is dropped into the scene.
+    if (type === 'textBillboard') {
+      props.collide = false;
+      props.text = 'YOUR TEXT';
+    }
     const result = this.registry.build(this.scene, this.physics, this.materials, props, this.shadowGen);
     const mesh = result.meshes[0];
-    const instance: Instance = { id, type, props, mesh, body: result.body, buildMeshScale: meshScale(mesh) };
+    const instance: Instance = {
+      id, type, props, mesh,
+      body: result.body,
+      buildMeshScale: meshScale(mesh),
+      textTexture: result.textTexture,
+    };
     this.syncHitbox(instance);
     this.instances.push(instance);
     this.select(instance);
@@ -836,6 +850,8 @@ export class Editor {
   }
 
   private rebuild(instance: Instance) {
+    instance.textTexture?.dispose();
+    instance.textTexture = undefined;
     instance.mesh.dispose();
     if (instance.body) {
       this.physics.removeRigidBody(instance.body);
@@ -844,6 +860,7 @@ export class Editor {
     instance.mesh = result.meshes[0];
     instance.body = result.body;
     instance.buildMeshScale = meshScale(instance.mesh);
+    instance.textTexture = result.textTexture;
     this.syncHitbox(instance);
     if (this.selected === instance) {
       this.hl.addMesh(instance.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
@@ -856,6 +873,7 @@ export class Editor {
 
   private deleteSelected() {
     if (!this.selected) return;
+    this.selected.textTexture?.dispose();
     this.selected.mesh.dispose();
     this.selected.hitbox?.dispose();
     if (this.selected.body) this.physics.removeRigidBody(this.selected.body);
@@ -895,6 +913,7 @@ export class Editor {
       mesh: result.meshes[0],
       body: result.body,
       buildMeshScale: meshScale(result.meshes[0]),
+      textTexture: result.textTexture,
     };
     this.syncHitbox(copy);
     this.instances.push(copy);
@@ -952,6 +971,25 @@ export class Editor {
     this.elInspector.appendChild(vec3('Position', 'position'));
     this.elInspector.appendChild(vec3('Rotation', 'rotation'));
     this.elInspector.appendChild(vec3('Scale', 'scale'));
+
+    // --- Text billboard message ---------------------------------------------
+    if (i.type === 'textBillboard') {
+      this.elInspector.appendChild(this.h3('Billboard Text'));
+      const textField = document.createElement('div');
+      textField.className = 'field';
+      const textArea = document.createElement('textarea');
+      textArea.rows = 4;
+      textArea.value = i.props.text ?? '';
+      textArea.placeholder = 'Type the sign text here. Enter starts a new line.';
+      textArea.addEventListener('input', () => {
+        i.props.text = textArea.value;
+        // Live redraw: no rebuild, so the mesh, gizmo and selection stay put.
+        // Read i.textTexture at event time — a transform edit can rebuild it.
+        if (i.textTexture) drawBillboardText(i.textTexture, i.props.text);
+      });
+      textField.appendChild(textArea);
+      this.elInspector.appendChild(textField);
+    }
 
     // --- Spawn facing ------------------------------------------------------
     if (i.type === 'playerSpawn' || i.type === 'enemySpawn') {
@@ -1151,6 +1189,7 @@ export class Editor {
 
   private newLevel() {
     for (const inst of this.instances) {
+      inst.textTexture?.dispose();
       inst.mesh.dispose();
       inst.hitbox?.dispose();
       if (inst.body) this.physics.removeRigidBody(inst.body);
@@ -1213,6 +1252,7 @@ export class Editor {
         mesh: result.meshes[0],
         body: result.body,
         buildMeshScale: meshScale(result.meshes[0]),
+        textTexture: result.textTexture,
       };
       this.syncHitbox(instance);
       this.instances.push(instance);
@@ -1287,6 +1327,7 @@ export class Editor {
   /** Called by `newLevel` before wiping; exposed for tests. */
   dispose() {
     for (const inst of this.instances) {
+      inst.textTexture?.dispose();
       inst.mesh.dispose();
       if (inst.body) this.physics.removeRigidBody(inst.body);
     }

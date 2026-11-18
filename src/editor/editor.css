@@ -188,7 +188,8 @@ button.primary:hover { background: #1b4068; }
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.field input {
+.field input,
+.field textarea {
   padding: 5px 8px;
   background: #0b0f16;
   border: 1px solid #33465c;
@@ -196,7 +197,14 @@ button.primary:hover { background: #1b4068; }
   border-radius: 3px;
   font-size: 12px;
 }
-.field input:focus { outline: none; border-color: #5c8ff0; }
+.field textarea {
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.4;
+  min-height: 64px;
+}
+.field input:focus,
+.field textarea:focus { outline: none; border-color: #5c8ff0; }
 .field select {
   padding: 5px 8px;
   background: #0b0f16;

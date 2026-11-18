@@ -51,6 +51,7 @@ export type ComponentType =
   | 'enemySpawn'
   | 'playerSpawn'
   | 'levelEnd'
+  | 'textBillboard'
   | 'wallrun_panel'
   | 'light';
 
@@ -74,6 +75,8 @@ export interface ComponentProps {
   mantle?: boolean;
   /** Spawn markers: initial facing direction in DEGREES around the Y axis. */
   facing?: number;
+  /** Text billboard: the message drawn on the sign. Supports \n line breaks. */
+  text?: string;
 }
 
 export interface ComponentBuildResult {
@@ -89,6 +92,8 @@ export interface ComponentBuildResult {
   /** Facing (degrees) carried by spawn markers. */
   facing?: number;
   light?: BABYLON.Light;
+  /** Text billboard: the live texture, so the editor can redraw without a rebuild. */
+  textTexture?: BABYLON.DynamicTexture;
 }
 
 export interface ComponentDef {
@@ -229,6 +234,47 @@ function configureMesh(
   mesh.material = material;
   mesh.receiveShadows = true;
   shadowGenerator?.addShadowCaster(mesh);
+}
+
+/**
+ * Repaint a text billboard's dynamic texture.
+ *
+ * Kept as a standalone helper (rather than inside the builder) so the editor
+ * can redraw live while typing without tearing down and rebuilding the mesh on
+ * every keystroke. Blank lines are preserved so spacing can be authored.
+ */
+export function drawBillboardText(texture: BABYLON.DynamicTexture, text: string) {
+  const { width, height } = texture.getSize();
+  const ctx = texture.getContext();
+  const lines = String(text ?? '').split('\n');
+
+  // Wipe to fully transparent so editing text never leaves ghost characters.
+  ctx.clearRect(0, 0, width, height);
+
+  // Shrink the font if the longest line would overflow the canvas, so longer
+  // messages stay readable instead of being clipped.
+  let fontSize = 44;
+  ctx.font = `bold ${fontSize}px monospace`;
+  const widest = Math.max(1, ...lines.map((line) => ctx.measureText(line).width));
+  if (widest > width - 16) {
+    fontSize = Math.max(10, Math.floor(fontSize * (width - 16) / widest));
+    ctx.font = `bold ${fontSize}px monospace`;
+  }
+
+  ctx.fillStyle = '#eafaff';
+  const lineHeight = fontSize * 1.35;
+  const blockHeight = lineHeight * lines.length;
+  let y = (height - blockHeight) / 2 + fontSize * 0.85;
+
+  // fillText has no idea what \n means, so draw each line by hand and centre
+  // it with measureText (ICanvasRenderingContext has no textAlign property).
+  for (const line of lines) {
+    const x = Math.max(0, (width - ctx.measureText(line).width) / 2);
+    ctx.fillText(line, x, y);
+    y += lineHeight;
+  }
+
+  texture.update(true);
 }
 
 // ---------------------------------------------------------------------------
@@ -538,6 +584,47 @@ export function buildDefaultRegistry(): ComponentRegistry {
           landing: new BABYLON.Vector3(props.position[0], props.position[1] + 0.5, props.position[2]),
         },
       };
+    },
+  });
+
+  // --- Text billboard -------------------------------------------------------
+  // A world-space sign that always faces the camera. The message is stored in
+  // props.text so it survives save/load/export 1:1 like every other prop.
+  registry.register({
+    type: 'textBillboard',
+    label: 'Text Billboard',
+    category: 'Markers',
+    defaultScale: [6, 2, 1],
+    build: (scene, _physics, _reg, props) => {
+      const width = Math.max(0.5, props.scale[0]);
+      const height = Math.max(0.25, props.scale[1]);
+      const plane = BABYLON.MeshBuilder.CreatePlane(props.id, { width, height }, scene);
+      plane.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
+      plane.rotation.copyFrom(new BABYLON.Vector3(props.rotation[0], props.rotation[1], props.rotation[2]));
+      plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+
+      // Match the canvas aspect to the plane so text isn't stretched.
+      const texWidth = 1024;
+      const texHeight = Math.max(128, Math.round(texWidth * height / width));
+      const texture = new BABYLON.DynamicTexture(`${props.id}-tex`, {
+        width: texWidth, height: texHeight,
+      }, scene, false);
+      // The canvas is cleared to transparent between lines; without this the
+      // material treats the whole quad as opaque and shows a black panel.
+      texture.hasAlpha = true;
+      drawBillboardText(texture, props.text ?? '');
+
+      const mat = new BABYLON.StandardMaterial(`${props.id}-mat`, scene);
+      mat.diffuseTexture = texture;
+      mat.emissiveTexture = texture;
+      mat.emissiveColor = BABYLON.Color3.White();
+      mat.disableLighting = true;
+      mat.backFaceCulling = false;
+      mat.useAlphaFromDiffuseTexture = true;
+      plane.material = mat;
+
+      // No collider by default: this is signage, not geometry to stand on.
+      return { meshes: [plane], textTexture: texture };
     },
   });
 
