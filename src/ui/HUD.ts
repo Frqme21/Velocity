@@ -21,6 +21,7 @@ export class HUD {
   private cinematicBarsElement: HTMLElement;
   private cinematicCaptionElement: HTMLElement;
   private fatalElement: HTMLElement;
+  private completeElement: HTMLElement;
   /** The pending fade-out timers of the screen flashes. */
   private timers = new Map<'damage' | 'hit', number>();
 
@@ -48,6 +49,10 @@ export class HUD {
         <div class="fatal-title">FATAL ERROR</div>
         <div class="fatal-sub">PRESS <kbd>R</kbd> TO RESTART</div>
       </div>
+      <div id="level-complete" aria-live="assertive">
+        <div class="complete-title">LEVEL COMPLETE</div>
+        <div class="complete-sub">PRESS <kbd>R</kbd> TO RUN IT AGAIN</div>
+      </div>
     `;
     this.speedElement = root.querySelector<HTMLElement>('#speed')!;
     this.fpsElement = root.querySelector<HTMLElement>('#fps')!;
@@ -60,6 +65,7 @@ export class HUD {
     this.cinematicBarsElement = root.querySelector<HTMLElement>('#cinematic-bars')!;
     this.cinematicCaptionElement = root.querySelector<HTMLElement>('#cinematic-caption')!;
     this.fatalElement = root.querySelector<HTMLElement>('#fatal-error')!;
+    this.completeElement = root.querySelector<HTMLElement>('#level-complete')!;
   }
 
   /** Enter or leave the scripted intro: letterbox, caption and hidden HUD. */
@@ -92,6 +98,17 @@ export class HUD {
   hideFatalError() {
     document.body.classList.remove('fatal');
     this.fatalElement.classList.remove('active');
+  }
+
+  /** Show the completion screen after the player enters a finish zone. */
+  showLevelComplete() {
+    document.body.classList.add('complete');
+    this.completeElement.classList.add('active');
+  }
+
+  hideLevelComplete() {
+    document.body.classList.remove('complete');
+    this.completeElement.classList.remove('active');
   }
 
   update(state: HUDState) {

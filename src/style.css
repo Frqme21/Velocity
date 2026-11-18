@@ -327,7 +327,11 @@ body.cinematic #speed-lines,
 body.fatal #crosshair,
 body.fatal #dash-meter,
 body.fatal #movement-stats,
-body.fatal #speed-lines {
+body.fatal #speed-lines,
+body.complete #crosshair,
+body.complete #dash-meter,
+body.complete #movement-stats,
+body.complete #speed-lines {
   display: none;
 }
 
@@ -377,4 +381,52 @@ body.fatal #speed-lines {
   color: #fff;
   font: inherit;
   box-shadow: 0 2px 0 rgba(120, 0, 12, 0.9);
+}
+
+/* -------------------------------------------------------------------------
+ * Level complete / finish zone
+ * ---------------------------------------------------------------------- */
+#level-complete {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  opacity: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 50%, rgba(0, 70, 40, 0.5) 0%, rgba(4, 12, 10, 0.9) 100%),
+    repeating-linear-gradient(0deg, rgba(80, 255, 140, 0.02) 0 2px, transparent 2px 5px);
+  transition: opacity 0.25s ease-out;
+}
+
+#level-complete.active {
+  opacity: 1;
+}
+
+.complete-title {
+  color: #6dff9d;
+  font: 800 clamp(38px, 7vw, 96px)/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 30px rgba(60, 255, 120, 0.5), 0 4px 0 #003418;
+}
+
+.complete-sub {
+  color: #b6ffcf;
+  font: 700 clamp(13px, 1.7vw, 20px)/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.22em;
+}
+
+#level-complete kbd {
+  display: inline-block;
+  min-width: 1.8em;
+  padding: 2px 7px;
+  border: 1px solid rgba(120, 255, 160, 0.8);
+  border-radius: 3px;
+  background: rgba(60, 255, 100, 0.14);
+  color: #fff;
+  font: inherit;
+  box-shadow: 0 2px 0 rgba(0, 90, 30, 0.9);
 }

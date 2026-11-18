@@ -17,6 +17,8 @@ export interface LoadedLevel {
   enemyFacings: number[];
   /** Initial yaw (radians) for the player spawn marker. */
   playerFacing: number;
+  /** Finish zones; entering one completes the level. */
+  finishZones: Array<{ position: BABYLON.Vector3; radius: number }>;
   /** Disposable static bodies/colliders created for collidable components. */
   bodies: RAPIER.RigidBody[];
   lights: BABYLON.Light[];
@@ -61,6 +63,7 @@ export function loadLevel(
   let playerFacing = 0;
   const wallRunColliders: number[] = [];
   const mantleColliders: number[] = [];
+  const finishZones: Array<{ position: BABYLON.Vector3; radius: number }> = [];
 
   const spawn = new BABYLON.Vector3(data.spawn[0], Math.max(data.spawn[1], 0.92), data.spawn[2]);
   const gs = data.gameplaySpawn ?? data.spawn;
@@ -111,6 +114,7 @@ export function loadLevel(
       debugMeshes.push(dbg);
     }
     if (result.anchor) grappleAnchors.push(result.anchor);
+    if (result.finish) finishZones.push(result.finish);
     // Only an ENEMY Spawn marker creates an enemy. A Player Spawn marker
     // previously fell into this branch too, so every player marker spawned a
     // stray guard. Player markers instead set the gameplay spawn below.
@@ -148,6 +152,14 @@ export function loadLevel(
     enemyFacings.push(0); // explicit array entries have no facing data
   }
 
+  // --- Explicit finish zones ------------------------------------------------
+  for (const f of data.finishZones ?? []) {
+    finishZones.push({
+      position: new BABYLON.Vector3(f.position[0], f.position[1], f.position[2]),
+      radius: f.radius ?? 3,
+    });
+  }
+
   // --- Lights ---------------------------------------------------------------
   for (const l of data.lights ?? []) {
     const light = new BABYLON.PointLight(
@@ -171,6 +183,7 @@ export function loadLevel(
     enemySpawns,
     enemyFacings,
     playerFacing,
+    finishZones,
     bodies,
     lights,
     layoutOverlaps: [],

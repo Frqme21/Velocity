@@ -50,6 +50,7 @@ export type ComponentType =
   | 'grappleAnchor'
   | 'enemySpawn'
   | 'playerSpawn'
+  | 'levelEnd'
   | 'wallrun_panel'
   | 'light';
 
@@ -82,6 +83,8 @@ export interface ComponentBuildResult {
   /** Rapier collider handle, used to tag parkour surfaces. */
   colliderHandle?: number;
   anchor?: GrappleAnchorPoint;
+  /** Finish-zone marker: entering it completes the level. */
+  finish?: { position: BABYLON.Vector3; radius: number };
   spawn?: BABYLON.Vector3;
   /** Facing (degrees) carried by spawn markers. */
   facing?: number;
@@ -112,6 +115,8 @@ export interface LevelData {
   components: ComponentProps[];
   grappleAnchors: Array<{ position: [number, number, number]; landing: [number, number, number] }>;
   enemySpawns: [number, number, number][];
+  /** Optional explicit finish zones, in addition to `levelEnd` components. */
+  finishZones?: Array<{ position: [number, number, number]; radius?: number }>;
   lights?: Array<{ position: [number, number, number]; intensity?: number }>;
   /**
    * Level-wide parkour settings.
@@ -533,6 +538,48 @@ export function buildDefaultRegistry(): ComponentRegistry {
           landing: new BABYLON.Vector3(props.position[0], props.position[1] + 0.5, props.position[2]),
         },
       };
+    },
+  });
+
+  // --- Level end / finish zone ---------------------------------------------
+  registry.register({
+    type: 'levelEnd',
+    label: 'Level End (Finish)',
+    category: 'Markers',
+    defaultScale: [3, 3, 3],
+    build: (scene, _physics, _reg, props) => {
+      const meshes: BABYLON.AbstractMesh[] = [];
+      const radius = Math.max(0.5, props.scale[0]);
+      const position = new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]);
+
+      const ringMat = new BABYLON.StandardMaterial(`${props.id}-mat`, scene);
+      ringMat.emissiveColor = new BABYLON.Color3(0.25, 1, 0.55);
+      ringMat.disableLighting = true;
+      const beamMat = new BABYLON.StandardMaterial(`${props.id}-beam-mat`, scene);
+      beamMat.emissiveColor = new BABYLON.Color3(0.15, 0.8, 0.4);
+      beamMat.alpha = 0.18;
+      beamMat.disableLighting = true;
+      beamMat.backFaceCulling = false;
+
+      const ring = BABYLON.MeshBuilder.CreateTorus(props.id, {
+        diameter: radius * 2, thickness: 0.16, tessellation: 32,
+      }, scene);
+      ring.position.copyFrom(position);
+      ring.position.y += 0.08;
+      ring.rotation.copyFrom(new BABYLON.Vector3(props.rotation[0], props.rotation[1], props.rotation[2]));
+      ring.material = ringMat;
+      meshes.push(ring);
+
+      const beam = BABYLON.MeshBuilder.CreateCylinder(`${props.id}-beam`, {
+        diameter: radius * 0.9, height: 3,
+      }, scene);
+      beam.position.copyFrom(position);
+      beam.position.y += 1.5;
+      beam.material = beamMat;
+      beam.isPickable = false;
+      meshes.push(beam);
+
+      return { meshes, finish: { position, radius } };
     },
   });
 

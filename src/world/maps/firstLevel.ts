@@ -277,6 +277,13 @@ export function createFirstLevel(
   // ------------------------------------------------------------------
   floor('final-platform', 0, 76, 26, 16, 0, deck);
   box('final-banner', new BABYLON.Vector3(0, 4.4, 74), new BABYLON.Vector3(12, 1.4, 0.3), neon, false);
+  // Finish pad: step into the ring to clear the level.
+  const finishRing = BABYLON.MeshBuilder.CreateTorus('finish-ring', {
+    diameter: 6, thickness: 0.18, tessellation: 32,
+  }, scene);
+  finishRing.position.set(0, 0.12, 82);
+  finishRing.material = neon;
+  meshes.push(finishRing);
   // sign('SECTOR CLEAR', new BABYLON.Vector3(0, 6.4, 74), '#8fffb6');
   rail('final-west', -12.6, 76, 15, 0, true);
   rail('final-east', 12.6, 76, 15, 0, true);
@@ -353,6 +360,7 @@ export function createFirstLevel(
     ],
     enemyFacings: [0, 0, 0],
     playerFacing: 0,
+    finishZones: [{ position: new BABYLON.Vector3(0, 0.92, 82), radius: 3 }],
     update: (dt) => {
       for (const animate of animated) animate(dt);
     },

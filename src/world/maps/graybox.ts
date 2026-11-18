@@ -1,6 +1,12 @@
 import * as BABYLON from '@babylonjs/core';
 import * as RAPIER from '@dimforge/rapier3d-compat';
 
+/** A cylindrical finish zone; touching it completes the level. */
+export interface FinishZone {
+  position: BABYLON.Vector3;
+  radius: number;
+}
+
 export interface GrayboxWorld {
   spawn: BABYLON.Vector3;
   meshes: BABYLON.AbstractMesh[];
@@ -12,6 +18,8 @@ export interface GrayboxWorld {
   enemyFacings: number[];
   /** Initial yaw (radians) for the player spawn. */
   playerFacing: number;
+  /** Finish zones placed in the level (empty when none are authored). */
+  finishZones?: FinishZone[];
 }
 
 /** A grapple ring plus the spot its vault should land the player on. */

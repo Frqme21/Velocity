@@ -72,8 +72,12 @@ export class Editor {
 
   /** Gizmo mode: 'translate' | 'rotate' | 'scale' | null. */
   private gizmoMode: 'translate' | 'rotate' | 'scale' | null = null;
+  /** The instance actually attached to the gizmo when the drag began. */
+  private dragTarget: Instance | null = null;
   /** Object scale captured when a gizmo drag begins (for folding mesh.scaling). */
   private dragStartScale: [number, number, number] = [1, 1, 1];
+  /** Mesh scaling at drag start; gizmo changes are measured relative to this. */
+  private dragStartMeshScale: [number, number, number] = [1, 1, 1];
   private alpha = 0;
   private beta = 1.1;
   private radius = 26;
@@ -194,11 +198,16 @@ export class Editor {
       }
     }
 
-    // Capture the starting scale so the scale gizmo (which multiplies
-    // mesh.scaling) can be folded back into the absolute component scale.
+    // Capture the state of the mesh the gizmo is ACTUALLY attached to. Using
+    // `this.selected` blindly let a stale selection poison the scale fold.
     const onGizmoDragStart = () => {
-      if (!this.selected) return;
-      this.dragStartScale = [...this.selected.props.scale];
+      const attached = this.gizmoManager.attachedMesh;
+      const target = this.instances.find((i) => i.mesh === attached) ?? this.selected;
+      if (!target) return;
+      this.dragTarget = target;
+      this.dragStartScale = [...target.props.scale];
+      const s = (target.mesh as BABYLON.Mesh).scaling;
+      this.dragStartMeshScale = [s.x, s.y, s.z];
     };
     // Keep the Rapier collider and hitbox wireframe glued to the mesh *while*
     // dragging, not just when the drag ends. Otherwise the object visually
@@ -207,24 +216,21 @@ export class Editor {
     // On release, fold the final transform into the component data and do one
     // clean rebuild so the collider shape exactly matches the new size.
     const onGizmoDragEnd = () => {
-      if (!this.selected) return;
-      const m = this.selected.mesh as BABYLON.Mesh;
-      const base = this.dragStartScale;
-      this.selected.props.position = [m.position.x, m.position.y, m.position.z];
-      this.selected.props.rotation = [m.rotation.x, m.rotation.y, m.rotation.z];
+      const target = this.dragTarget ?? this.selected;
+      if (!target) return;
+      const m = target.mesh as BABYLON.Mesh;
+      target.props.position = [m.position.x, m.position.y, m.position.z];
+      target.props.rotation = [m.rotation.x, m.rotation.y, m.rotation.z];
       // Spawn markers use facing (not rotation) as their meaningful yaw —
       // persist a gizmo rotation so the arrow keeps pointing where you put it.
-      if (this.selected.type === 'playerSpawn' || this.selected.type === 'enemySpawn') {
-        this.selected.props.facing = Math.round((m.rotation.y * 180 / Math.PI) * 10) / 10;
+      if (target.type === 'playerSpawn' || target.type === 'enemySpawn') {
+        target.props.facing = Math.round((m.rotation.y * 180 / Math.PI) * 10) / 10;
       }
-      this.selected.props.scale = [
-        base[0] * m.scaling.x,
-        base[1] * m.scaling.y,
-        base[2] * m.scaling.z,
-      ];
-      this.rebuild(this.selected);
+      target.props.scale = this.draggedScale(m);
+      this.dragTarget = null;
+      this.rebuild(target);
       this.hl.removeAllMeshes();
-      this.hl.addMesh(this.selected.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
+      this.hl.addMesh(target.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
       this.refreshInspector();
     };
     for (const g of [posGizmo, rotGizmo, sclGizmo]) {
@@ -532,6 +538,7 @@ export class Editor {
 
   private select(instance: Instance | null) {
     this.selected = instance;
+    this.dragTarget = null;
     this.hl.removeAllMeshes();
     if (instance) {
       this.hl.addMesh(instance.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
@@ -682,21 +689,35 @@ export class Editor {
    * Rapier collider and the lime hitbox wireframe so collision never lags
    * behind the visible object. Full rebuild happens once on drag end.
    */
+  /**
+   * Absolute scale represented by the gizmo right now.
+   *
+   * Babylon's scale gizmo multiplies the mesh's CURRENT scaling. Some meshes
+   * (grapple rings) are built with `scaling = props.scale`, and a stale drag
+   * can leave a mesh scaled too, so multiplying `props.scale * mesh.scaling`
+   * would square the size on every drag — eventually turning a plate into a
+   * cube. Always measure the gizmo's DELTA against the scaling at drag start.
+   */
+  private draggedScale(m: BABYLON.Mesh): [number, number, number] {
+    const base = this.dragStartScale;
+    const meshBase = this.dragStartMeshScale;
+    const factor = (k: number, current: number) => {
+      const from = Math.abs(meshBase[k]) > 1e-6 ? meshBase[k] : 1;
+      return Math.max(0.01, base[k] * current / from);
+    };
+    return [factor(0, m.scaling.x), factor(1, m.scaling.y), factor(2, m.scaling.z)];
+  }
+
   private syncBodyToMesh() {
-    const i = this.selected;
+    const i = this.dragTarget ?? this.selected;
     if (!i) return;
     const m = i.mesh as BABYLON.Mesh;
     const p = m.position;
     const r = m.rotation;
-    const s = m.scaling;
 
     i.props.position = [p.x, p.y, p.z];
     i.props.rotation = [r.x, r.y, r.z];
-    i.props.scale = [
-      this.dragStartScale[0] * s.x,
-      this.dragStartScale[1] * s.y,
-      this.dragStartScale[2] * s.z,
-    ];
+    i.props.scale = this.draggedScale(m);
 
     if (i.body) {
       i.body.setTranslation({ x: p.x, y: p.y, z: p.z }, true);
@@ -1014,6 +1035,7 @@ export class Editor {
     }
     this.instances = [];
     this.counters.clear();
+    this.dragTarget = null;
     this.select(null);
     this.elLevelName.value = 'untitled';
     this.setStatus('New level');

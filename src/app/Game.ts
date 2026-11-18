@@ -40,6 +40,8 @@ export class Game {
   private customLevel = false;
   /** True after falling out of the level, until R restarts. */
   private fatal = false;
+  /** True after touching a finish zone, until R restarts. */
+  private completed = false;
   /** Frame counter for debug logging. */
   private debugFrame = 0;
 
@@ -368,6 +370,13 @@ export class Game {
         return;
       }
 
+      // --- Level complete: frozen until R ----------------------------------
+      if (this.completed) {
+        this.world.update(dt);
+        this.scene.render();
+        return;
+      }
+
       // --- Fatal error: frozen until R ------------------------------------
       if (this.fatal) {
         this.input.read();
@@ -414,6 +423,21 @@ export class Game {
         enemy.update(simulationDt, worldTimeScale, playerPosition);
       }
       this.combat.update(dt);
+
+      // Touching a finish zone clears the level. Distance is measured on the
+      // ground plane with a generous vertical window so a jump over the pad
+      // still counts, but falling far below it does not.
+      if (!this.completed) {
+        for (const zone of this.world.finishZones ?? []) {
+          const dx = playerPosition.x - zone.position.x;
+          const dz = playerPosition.z - zone.position.z;
+          const dy = Math.abs(playerPosition.y - zone.position.y);
+          if (dx * dx + dz * dz <= zone.radius * zone.radius && dy <= 3) {
+            this.enterCompleted();
+            break;
+          }
+        }
+      }
 
       // Falling out of the level is a fatal error, not a silent teleport.
       if (playerPosition.y < this.world.killY) {
@@ -543,6 +567,14 @@ export class Game {
     this.hud.showFatalError();
   }
 
+  /** Freeze the run on a completion screen until R restarts it. */
+  private enterCompleted() {
+    if (this.completed) return;
+    this.completed = true;
+    this.input.enabled = false;
+    this.hud.showLevelComplete();
+  }
+
   /**
    * Put the run back to the start.
    *
@@ -561,7 +593,9 @@ export class Game {
     this.hitStopTimer = 0;
     this.pendingReset = false;
     this.fatal = false;
+    this.completed = false;
     this.hud.hideFatalError();
+    this.hud.hideLevelComplete();
     this.input.enabled = true;
 
     this.katana.cinematicPose = null;
