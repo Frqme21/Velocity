@@ -2,6 +2,7 @@ import * as BABYLON from '@babylonjs/core';
 import * as RAPIER from '@dimforge/rapier3d-compat';
 import { ComponentRegistry, buildDefaultRegistry, type LevelData, type ComponentProps } from '../components/registry';
 import { MaterialRegistry } from '../components/materials';
+import { type LaserWall } from './graybox';
 
 export interface LoadedLevel {
   name: string;
@@ -19,6 +20,8 @@ export interface LoadedLevel {
   playerFacing: number;
   /** Finish zones; entering one completes the level. */
   finishZones: Array<{ position: BABYLON.Vector3; radius: number }>;
+  /** Lethal laser volumes; touching one kills and respawns the player. */
+  laserWalls: LaserWall[];
   /** Disposable static bodies/colliders created for collidable components. */
   bodies: RAPIER.RigidBody[];
   lights: BABYLON.Light[];
@@ -64,6 +67,7 @@ export function loadLevel(
   const wallRunColliders: number[] = [];
   const mantleColliders: number[] = [];
   const finishZones: Array<{ position: BABYLON.Vector3; radius: number }> = [];
+  const laserWalls: LaserWall[] = [];
 
   const spawn = new BABYLON.Vector3(data.spawn[0], Math.max(data.spawn[1], 0.92), data.spawn[2]);
   const gs = data.gameplaySpawn ?? data.spawn;
@@ -115,6 +119,20 @@ export function loadLevel(
     }
     if (result.anchor) grappleAnchors.push(result.anchor);
     if (result.finish) finishZones.push(result.finish);
+    // Laser walls are lethal on contact. Store their oriented box so the game
+    // can test the player against them every frame (see Game.touchesLaserWall).
+    if (props.type === 'laserWall') {
+      const rotation = BABYLON.Quaternion.RotationYawPitchRoll(
+        props.rotation[1], props.rotation[0], props.rotation[2],
+      );
+      laserWalls.push({
+        position: new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]),
+        halfExtents: new BABYLON.Vector3(
+          props.scale[0] / 2, props.scale[1] / 2, props.scale[2] / 2,
+        ),
+        inverseRotation: rotation.conjugate(),
+      });
+    }
     // Only an ENEMY Spawn marker creates an enemy. A Player Spawn marker
     // previously fell into this branch too, so every player marker spawned a
     // stray guard. Player markers instead set the gameplay spawn below.
@@ -184,6 +202,7 @@ export function loadLevel(
     enemyFacings,
     playerFacing,
     finishZones,
+    laserWalls,
     bodies,
     lights,
     layoutOverlaps: [],

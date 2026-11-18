@@ -7,6 +7,18 @@ export interface FinishZone {
   radius: number;
 }
 
+/**
+ * A lethal laser volume. The box is stored in world space with its inverse
+ * rotation so the game can test the player against it in the wall's own local
+ * space (an oriented-box test that survives any rotation).
+ */
+export interface LaserWall {
+  position: BABYLON.Vector3;
+  halfExtents: BABYLON.Vector3;
+  /** Conjugate of the wall's rotation quaternion (inverse rotation). */
+  inverseRotation: BABYLON.Quaternion;
+}
+
 export interface GrayboxWorld {
   spawn: BABYLON.Vector3;
   meshes: BABYLON.AbstractMesh[];
@@ -20,6 +32,8 @@ export interface GrayboxWorld {
   playerFacing: number;
   /** Finish zones placed in the level (empty when none are authored). */
   finishZones?: FinishZone[];
+  /** Lethal laser walls: touching one kills and respawns the player. */
+  laserWalls?: LaserWall[];
 }
 
 /** A grapple ring plus the spot its vault should land the player on. */

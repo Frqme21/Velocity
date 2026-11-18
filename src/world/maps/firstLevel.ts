@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import * as RAPIER from '@dimforge/rapier3d-compat';
-import { type GrayboxWorld, type GrappleAnchorPoint } from './graybox';
+import { type GrayboxWorld, type GrappleAnchorPoint, type LaserWall } from './graybox';
 
 export interface FirstLevelWorld extends GrayboxWorld {
   /** Animate the moving neon / props. */
@@ -31,6 +31,8 @@ export interface FirstLevelWorld extends GrayboxWorld {
   /** Colliders that may be mantled (the hand-authored level keeps it open). */
   mantleColliders: number[];
   mantleStrict: boolean;
+  /** Lethal laser walls (the hand-authored course has none). */
+  laserWalls: LaserWall[];
 }
 
 /** Body centre heights for a floor whose top surface is `top`. */
@@ -361,6 +363,7 @@ export function createFirstLevel(
     enemyFacings: [0, 0, 0],
     playerFacing: 0,
     finishZones: [{ position: new BABYLON.Vector3(0, 0.92, 82), radius: 3 }],
+    laserWalls: [],
     update: (dt) => {
       for (const animate of animated) animate(dt);
     },

@@ -52,6 +52,7 @@ export type ComponentType =
   | 'playerSpawn'
   | 'levelEnd'
   | 'textBillboard'
+  | 'laserWall'
   | 'wallrun_panel'
   | 'light';
 
@@ -369,6 +370,59 @@ export function buildDefaultRegistry(): ComponentRegistry {
   surface('scratched_metal', 'Scratched Metal', 'Walls', [8, 4, 0.4], 'scratched_metal', [2, 2]);
   surface('cracked_concrete', 'Cracked Concrete', 'Walls', [8, 4, 0.4], 'cracked_concrete', [2, 2]);
   surface('graffiti', 'Graffiti Wall', 'Walls', [8, 4, 0.4], 'graffiti', [2, 2]);
+
+  // --- Lethal laser wall ----------------------------------------------------
+  // A wall-shaped hazard: the player dies and respawns on contact. It is a
+  // normal solid collider so its hitbox matches its mesh exactly and it follows
+  // every move/rotate/scale edit. loadLevel reads props of this type to build
+  // the hazard volumes the game tests against each frame.
+  registry.register({
+    type: 'laserWall',
+    label: 'Laser Wall (Kills)',
+    category: 'Walls',
+    defaultScale: [6, 4, 0.4],
+    build: (scene, physics, _reg, props) => {
+      const meshes: BABYLON.AbstractMesh[] = [];
+      const field = BABYLON.MeshBuilder.CreateBox(props.id, {
+        width: props.scale[0], height: props.scale[1], depth: props.scale[2],
+      }, scene);
+      field.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
+      field.rotation.copyFrom(new BABYLON.Vector3(props.rotation[0], props.rotation[1], props.rotation[2]));
+
+      const fieldMat = new BABYLON.StandardMaterial(`${props.id}-field`, scene);
+      fieldMat.diffuseColor = new BABYLON.Color3(0.6, 0.02, 0.08);
+      fieldMat.emissiveColor = new BABYLON.Color3(0.95, 0.08, 0.18);
+      fieldMat.specularColor = BABYLON.Color3.Black();
+      fieldMat.alpha = 0.32;
+      fieldMat.backFaceCulling = false;
+      fieldMat.disableLighting = true;
+      field.material = fieldMat;
+      meshes.push(field);
+
+      // A bright wireframe frame makes the hazard readable from a distance.
+      const frame = BABYLON.MeshBuilder.CreateBox(`${props.id}-frame`, {
+        width: props.scale[0], height: props.scale[1], depth: props.scale[2],
+      }, scene);
+      frame.parent = field;
+      const frameMat = new BABYLON.StandardMaterial(`${props.id}-frame-mat`, scene);
+      frameMat.emissiveColor = new BABYLON.Color3(1, 0.28, 0.36);
+      frameMat.wireframe = true;
+      frameMat.disableLighting = true;
+      frame.material = frameMat;
+      frame.isPickable = false;
+      // The frame rides along as a child of the field; no need to return it
+      // in meshes (the game loader would add every returned mesh as a shadow
+      // caster, and a wireframe casts ugly shadows). Children are disposed
+      // together with their parent.
+
+      const result: ComponentBuildResult = { meshes };
+      const c = addStaticCollider(physics, props.position, props.scale, props.rotation);
+      result.body = c.body;
+      result.collider = c.collider;
+      result.colliderHandle = c.collider.handle;
+      return result;
+    },
+  });
 
   surface('concrete_floor', 'Concrete Floor', 'Floors', [16, 0.4, 16], 'concrete_floor', [4, 4]);
   surface('grate_floor', 'Grate Floor', 'Floors', [16, 0.4, 16], 'grate_floor', [4, 4]);

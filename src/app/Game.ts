@@ -14,6 +14,7 @@ import { COMBAT_CONFIG } from '../config/combat';
 import { ProjectileManager } from '../combat/ProjectileManager';
 import { CombatSystem } from '../combat/CombatSystem';
 import { PistolEnemy } from '../entities/PistolEnemy';
+import { MOVEMENT_CONFIG } from '../config/movement';
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -49,6 +50,11 @@ export class Game {
   private hitStopTimer = 0;
   /** Set when the player was hit and the run has to be reset. */
   private pendingReset = false;
+  /**
+   * Brief immunity after a laser death so respawning on top of a hazard (or
+   * brushing it again on the next frame) can't chain-kill the player.
+   */
+  private hazardGraceTimer = 0.6;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -454,6 +460,16 @@ export class Game {
         }
       }
 
+      // Touching a laser wall kills the player and respawns them at the start.
+      // The short grace timer (started at spawn and refreshed after each death)
+      // stops an overlapping hazard from killing them again on the next frame.
+      this.hazardGraceTimer = Math.max(0, this.hazardGraceTimer - dt);
+      if (this.hazardGraceTimer <= 0 && this.touchesLaserWall(playerPosition)) {
+        this.hud.flashDamage();
+        this.hazardGraceTimer = 0.8;
+        this.pendingReset = true;
+      }
+
       // Falling out of the level is a fatal error, not a silent teleport.
       if (playerPosition.y < this.world.killY) {
         this.enterFatal();
@@ -566,6 +582,28 @@ export class Game {
       COMBAT_CONFIG.LUNGE_DIRECTION_BLEND,
       COMBAT_CONFIG.LUNGE_DURATION,
     );
+  }
+
+  /**
+   * Test the player's capsule against every laser wall in the level.
+   *
+   * Each wall is an oriented box. Bringing the player's centre into the wall's
+   * local space (via the inverse rotation) turns the test into three cheap
+   * axis comparisons. A small pad accounts for the player's radius so
+   * brushing the surface counts as touching it.
+   */
+  private touchesLaserWall(playerPosition: BABYLON.Vector3): boolean {
+    const pad = MOVEMENT_CONFIG.PLAYER_RADIUS + 0.15;
+    for (const wall of this.world.laserWalls ?? []) {
+      const local = playerPosition.subtract(wall.position);
+      local.rotateByQuaternionToRef(wall.inverseRotation, local);
+      if (Math.abs(local.x) <= wall.halfExtents.x + pad
+        && Math.abs(local.y) <= wall.halfExtents.y + pad
+        && Math.abs(local.z) <= wall.halfExtents.z + pad) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
