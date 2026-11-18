@@ -304,12 +304,19 @@ export class Editor {
     if (this.keys.size === 0) return;
     const speed = Math.max(2, this.radius * 0.6) * dt;
 
+    // ArcRotateCamera: alpha=0 puts camera on +Z axis looking toward origin (-Z).
+    // View direction (camera -> target) projected on ground = (-sin(alpha), 0, -cos(alpha)).
+    // Right = cross(viewDir, up) = (-viewDir.z, 0, viewDir.x) = (cos(alpha), 0, -sin(alpha)).
     const forward = new BABYLON.Vector3(
-      Math.sin(this.alpha),
+      -Math.sin(this.alpha),
       0,
-      Math.cos(this.alpha),
+      -Math.cos(this.alpha),
     );
-    const right = new BABYLON.Vector3(forward.z, 0, -forward.x);
+    const right = new BABYLON.Vector3(
+      -forward.z,
+      0,
+      forward.x,
+    );
 
     const move = BABYLON.Vector3.Zero();
     if (this.keys.has('KeyW')) move.addInPlace(forward.scale(1));
