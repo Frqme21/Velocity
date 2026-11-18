@@ -327,7 +327,20 @@ export class Editor {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
 
+  /** True if a Babylon gizmo is currently being dragged. */
+  private get gizmoDragging(): boolean {
+    return this.gizmoManager?.isDragging ?? false;
+  }
+
+  /** True if mouse is over a gizmo handle. */
+  private get gizmoHovered(): boolean {
+    return this.gizmoManager?.isHovered ?? false;
+  }
+
   private onPointerDown(e: PointerEvent) {
+    // Let gizmos eat the event first.
+    if (this.gizmoDragging || this.gizmoHovered) return;
+
     this.pointerDown = true;
     this.dragButton = e.button;
     this.lastPointer = { x: e.clientX, y: e.clientY };
@@ -348,7 +361,7 @@ export class Editor {
         const instance = this.instances.find((i) => i.mesh === pickResult.pickedMesh!);
         if (instance) {
           if (instance === this.selected) {
-            // Clicked the already-selected object again: start dragging it.
+            // Clicked the already-selected object again: start dragging it (legacy fallback).
             this.dragObject = true;
           } else {
             // Clicked a different object: select it instead of dragging.
@@ -365,34 +378,29 @@ export class Editor {
   }
 
   private onPointerMove(e: PointerEvent) {
-    const dx = e.clientX - this.lastPointer.x;
-    const dy = e.clientY - this.lastPointer.y;
+    // Don't fight the gizmo.
+    if (this.gizmoDragging || this.gizmoHovered) return;
+
     this.lastPointer = { x: e.clientX, y: e.clientY };
 
     if (!this.pointerDown) return;
 
-    if (this.dragButton === 0 && this.dragObject && this.selected) {
-      const { x, y } = this.canvasCoords(e);
-      this.moveSelectedOnPlane(x, y, this.selected.props.position[1]);
+    if (this.dragButton === 2) {
+      // Right-drag: pan camera.
+      const dx = e.clientX - this.lastPointer.x;
+      const dy = e.clientY - this.lastPointer.y;
+      this.panCamera(dx, dy);
       return;
     }
 
-    if (this.dragButton === 0) {
-      // Orbit around target.
-      this.alpha -= dx * 0.004;
-      this.beta = Math.min(Math.max(this.beta - dy * 0.004, 0.05), 1.45);
-    } else if (this.dragButton === 2) {
-      // Pan.
-      const cam = this.camera;
-      const forward = cam.getForwardRay().direction;
-      forward.y = 0;
-      forward.normalize();
-      const right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up());
-      right.normalize();
-      const up = BABYLON.Vector3.Up();
-      const speed = 0.005 * this.radius;
-      const pan = right.scale(dx * speed).add(up.scale(-dy * speed));
-      this.target.addInPlace(pan);
+    if (this.dragButton === 0 && this.dragObject && this.selected) {
+      // Legacy left-drag move (when no gizmo mode active).
+      this.dragSelected(e);
+    } else if (this.dragButton === 0 && !this.dragObject) {
+      // Left-drag on empty space: orbit camera.
+      const dx = e.clientX - this.lastPointer.x;
+      const dy = e.clientY - this.lastPointer.y;
+      this.orbitCamera(dx, dy);
     }
   }
 
@@ -402,30 +410,34 @@ export class Editor {
     this.dragObject = false;
   }
 
-  private onWheel(e: WheelEvent) {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 1.1 : 0.91;
-    this.radius = Math.min(Math.max(this.radius * delta, 5), 90);
+  /** Pan the camera target (right-drag). */
+  private panCamera(dx: number, dy: number) {
+    const cam = this.camera;
+    const forward = cam.getForwardRay().direction;
+    forward.y = 0;
+    forward.normalize();
+    const right = BABYLON.Vector3.Cross(forward, BABYLON.Vector3.Up());
+    right.normalize();
+    const up = BABYLON.Vector3.Up();
+    const speed = 0.005 * this.radius;
+    const pan = right.scale(dx * speed).add(up.scale(-dy * speed));
+    this.target.addInPlace(pan);
   }
 
-  private pickAt(x: number, y: number) {
-    const pickResult = this.scene.pick(x, y, (mesh) => {
-      return this.instances.some((i) => i.mesh === mesh);
-    }, false, this.camera);
-    if (pickResult.hit && pickResult.pickedMesh) {
-      const instance = this.instances.find((i) => i.mesh === pickResult.pickedMesh!);
-      if (instance) this.select(instance);
-    } else {
-      this.select(null);
-    }
+  /** Orbit the camera around the target (left-drag on empty space). */
+  private orbitCamera(dx: number, dy: number) {
+    this.alpha -= dx * 0.004;
+    this.beta = Math.min(Math.max(this.beta - dy * 0.004, 0.05), 1.45);
   }
 
-  private moveSelectedOnPlane(x: number, y: number, height: number) {
+  /** Legacy drag: move selected object on its current height plane. */
+  private dragSelected(e: PointerEvent) {
     const selected = this.selected;
     if (!selected) return;
+    const { x, y } = this.canvasCoords(e);
     const ray = this.scene.createPickingRay(x, y, BABYLON.Matrix.Identity(), this.camera);
     const plane = BABYLON.Plane.FromPositionAndNormal(
-      new BABYLON.Vector3(0, height, 0),
+      new BABYLON.Vector3(0, selected.props.position[1], 0),
       BABYLON.Vector3.Up(),
     );
     const dist = ray.intersectsPlane(plane);
@@ -444,6 +456,24 @@ export class Editor {
       selected.hitbox.position.z = point.z;
     }
     this.refreshInspector();
+  }
+
+  private onWheel(e: WheelEvent) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 1.1 : 0.91;
+    this.radius = Math.min(Math.max(this.radius * delta, 5), 90);
+  }
+
+  private pickAt(x: number, y: number) {
+    const pickResult = this.scene.pick(x, y, (mesh) => {
+      return this.instances.some((i) => i.mesh === mesh);
+    }, false, this.camera);
+    if (pickResult.hit && pickResult.pickedMesh) {
+      const instance = this.instances.find((i) => i.mesh === pickResult.pickedMesh!);
+      if (instance) this.select(instance);
+    } else {
+      this.select(null);
+    }
   }
 
   // ------------------------------------------------------------------ scene
