@@ -9,6 +9,11 @@ import {
   type LevelData,
 } from '../world/components/registry';
 import { MaterialRegistry } from '../world/components/materials';
+import { GizmoManager } from '@babylonjs/core/Gizmos/gizmoManager';
+import { PositionGizmo } from '@babylonjs/core/Gizmos/positionGizmo';
+import { RotationGizmo } from '@babylonjs/core/Gizmos/rotationGizmo';
+import { ScaleGizmo } from '@babylonjs/core/Gizmos/scaleGizmo';
+import { UtilityLayerRenderer } from '@babylonjs/core/Rendering/utilityLayerRenderer';
 
 interface Instance {
   id: string;
@@ -31,6 +36,11 @@ export class Editor {
   private registry: ComponentRegistry;
   private materials!: MaterialRegistry;
 
+  /** Babylon gizmo manager for position/rotation/scale manipulators. */
+  private gizmoManager!: GizmoManager;
+  /** Utility layer that draws gizmos on top of the scene. */
+  private utilityLayer!: UtilityLayerRenderer;
+
   private instances: Instance[] = [];
   private selected: Instance | null = null;
   private counters = new Map<string, number>();
@@ -44,6 +54,10 @@ export class Editor {
   private readonly elWallRunStrict: HTMLInputElement;
   /** Toolbar toggle: only tagged surfaces may be mantled. */
   private readonly elMantleStrict: HTMLInputElement;
+  /** Gizmo mode toolbar buttons. */
+  private readonly elGizmoMove: HTMLButtonElement;
+  private readonly elGizmoRotate: HTMLButtonElement;
+  private readonly elGizmoScale: HTMLButtonElement;
 
   // Input / camera
   private pointerDown = false;
@@ -52,6 +66,9 @@ export class Editor {
   private lastPointer = { x: 0, y: 0 };
   /** Keyboard navigation state for WASD/QE viewport movement. */
   private keys = new Set<string>();
+
+  /** Gizmo mode: 'translate' | 'rotate' | 'scale' | null. */
+  private gizmoMode: 'translate' | 'rotate' | 'scale' | null = null;
   private alpha = 0;
   private beta = 1.1;
   private radius = 26;
@@ -65,6 +82,9 @@ export class Editor {
     this.elInspector = document.getElementById('inspector')!;
     this.elWallRunStrict = document.getElementById('wallrun-strict') as HTMLInputElement;
     this.elMantleStrict = document.getElementById('mantle-strict') as HTMLInputElement;
+    this.elGizmoMove = document.getElementById('btn-gizmo-move') as HTMLButtonElement;
+    this.elGizmoRotate = document.getElementById('btn-gizmo-rotate') as HTMLButtonElement;
+    this.elGizmoScale = document.getElementById('btn-gizmo-scale') as HTMLButtonElement;
     this.registry = buildDefaultRegistry();
 
     this.bindUI();
@@ -87,6 +107,9 @@ export class Editor {
     document.getElementById('btn-copy')!.addEventListener('click', () => this.copyLevel());
     document.getElementById('btn-play')!.addEventListener('click', () => this.playLevel());
     this.elLevelName.addEventListener('change', () => this.setStatus('Level renamed'));
+    this.elGizmoMove.addEventListener('click', () => this.setGizmoMode('translate'));
+    this.elGizmoRotate.addEventListener('click', () => this.setGizmoMode('rotate'));
+    this.elGizmoScale.addEventListener('click', () => this.setGizmoMode('scale'));
 
     window.addEventListener('resize', () => this.engine.resize());
   }
@@ -128,6 +151,66 @@ export class Editor {
     this.camera.inputs.clear();
 
     this.hl = new BABYLON.HighlightLayer('hl', this.scene);
+
+    // Utility layer for gizmos (renders on top of everything).
+    this.utilityLayer = new UtilityLayerRenderer(this.scene);
+    this.utilityLayer.shouldRender = true;
+    this.utilityLayer.utilityLayerScene.autoClearDepthAndStencil = false;
+
+    // Gizmo manager with all three modes (translate, rotate, scale).
+    this.gizmoManager = new GizmoManager(this.scene);
+    this.gizmoManager.positionGizmoEnabled = false;
+    this.gizmoManager.rotationGizmoEnabled = false;
+    this.gizmoManager.scaleGizmoEnabled = false;
+    this.gizmoManager.usePointerToAttachGizmos = false; // we handle attach manually
+
+    const posGizmo = this.gizmoManager.gizmos.positionGizmo;
+    const rotGizmo = this.gizmoManager.gizmos.rotationGizmo;
+    const sclGizmo = this.gizmoManager.gizmos.scaleGizmo;
+
+    if (posGizmo) {
+      posGizmo.updateGizmoPositionToMatchAttachedMesh = true;
+      posGizmo.snapDistance = 0;
+    }
+    if (rotGizmo) {
+      rotGizmo.updateGizmoPositionToMatchAttachedMesh = true;
+      rotGizmo.snapDistance = Math.PI / 18; // 10°
+    }
+    if (sclGizmo) {
+      sclGizmo.updateGizmoPositionToMatchAttachedMesh = true;
+      sclGizmo.snapDistance = 0.1;
+    }
+
+    // Arrow shaft thickness + pickable area.
+    for (const g of [posGizmo, rotGizmo, sclGizmo]) {
+      if (g) {
+        g.updateScale = true;
+        (g as any).sensitivity = 1.0;
+      }
+    }
+
+    // When a gizmo drag ends, sync the transform back to our component data
+    // and rebuild the physics collider.
+    const onGizmoDragEnd = () => {
+      if (!this.selected) return;
+      const m = this.selected.mesh as BABYLON.Mesh;
+      const pos = m.position;
+      const rot = m.rotation;
+      const scl = m.scaling;
+      this.selected.props.position = [pos.x, pos.y, pos.z];
+      this.selected.props.rotation = [rot.x, rot.y, rot.z];
+      this.selected.props.scale = [scl.x, scl.y, scl.z];
+      // Rebuild physics body to match new transform.
+      this.rebuild(this.selected);
+      if (this.selected === this.selected) {
+        this.hl.removeMesh(m);
+        this.hl.addMesh(m, BABYLON.Color3.FromHexString('#8fd5ff'));
+      }
+      this.refreshInspector();
+    };
+    if (posGizmo) posGizmo.onDragEndObservable.add(onGizmoDragEnd);
+    if (rotGizmo) rotGizmo.onDragEndObservable.add(onGizmoDragEnd);
+    if (sclGizmo) sclGizmo.onDragEndObservable.add(onGizmoDragEnd);
 
     // Reference floor grid.
     const grid = BABYLON.MeshBuilder.CreateGround('editor-grid', { width: 200, height: 200 }, this.scene);
@@ -183,7 +266,17 @@ export class Editor {
       return;
     }
     this.keys.add(e.code);
-    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'KeyR', 'KeyF'].includes(e.code)) {
+    // Gizmo mode hotkeys: 1=translate, 2=rotate, 3=scale.
+    if (e.code === 'Digit1') {
+      e.preventDefault();
+      this.setGizmoMode('translate');
+    } else if (e.code === 'Digit2') {
+      e.preventDefault();
+      this.setGizmoMode('rotate');
+    } else if (e.code === 'Digit3') {
+      e.preventDefault();
+      this.setGizmoMode('scale');
+    } else if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'KeyR', 'KeyF'].includes(e.code)) {
       e.preventDefault();
     }
   }
@@ -362,8 +455,53 @@ export class Editor {
       this.hl.addMesh(instance.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
       this.target.copyFrom(instance.mesh.position);
       this.target.y = Math.max(this.target.y, instance.mesh.position.y + 2);
+      // Attach gizmo to the new selection (in current mode).
+      this.updateGizmoAttachment();
+    } else {
+      this.detachGizmo();
     }
     this.refreshInspector();
+  }
+
+  /** Set the active gizmo mode and update button states. */
+  private setGizmoMode(mode: 'translate' | 'rotate' | 'scale' | null) {
+    this.gizmoMode = mode;
+    this.updateGizmoButtons();
+    this.updateGizmoAttachment();
+  }
+
+  private updateGizmoButtons() {
+    const buttons = [this.elGizmoMove, this.elGizmoRotate, this.elGizmoScale];
+    const modes: Array<'translate' | 'rotate' | 'scale'> = ['translate', 'rotate', 'scale'];
+    buttons.forEach((btn, i) => {
+      if (modes[i] === this.gizmoMode) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+
+  /** Attach/detach the gizmo to the currently selected instance. */
+  private updateGizmoAttachment() {
+    if (!this.selected || !this.gizmoMode) {
+      this.detachGizmo();
+      return;
+    }
+    const mesh = this.selected.mesh as BABYLON.Mesh;
+    // Enable the correct gizmo, disable the others.
+    this.gizmoManager.positionGizmoEnabled = this.gizmoMode === 'translate';
+    this.gizmoManager.rotationGizmoEnabled = this.gizmoMode === 'rotate';
+    this.gizmoManager.scaleGizmoEnabled = this.gizmoMode === 'scale';
+    // Attach to the selected mesh.
+    this.gizmoManager.attachToMesh(mesh);
+  }
+
+  private detachGizmo() {
+    this.gizmoManager.positionGizmoEnabled = false;
+    this.gizmoManager.rotationGizmoEnabled = false;
+    this.gizmoManager.scaleGizmoEnabled = false;
+    this.gizmoManager.attachToMesh(null);
   }
 
   private addComponent(type: ComponentType) {
