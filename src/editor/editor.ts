@@ -22,6 +22,9 @@ interface Instance {
   mesh: BABYLON.AbstractMesh;
   body?: RAPIER.RigidBody;
   hitbox?: BABYLON.Mesh;
+  /** Collider half-extents captured at build time, for live gizmo scaling. */
+  baseHalfExtents?: { x: number; y: number; z: number };
+  baseScale?: [number, number, number];
 }
 
 export class Editor {
@@ -69,6 +72,8 @@ export class Editor {
 
   /** Gizmo mode: 'translate' | 'rotate' | 'scale' | null. */
   private gizmoMode: 'translate' | 'rotate' | 'scale' | null = null;
+  /** Object scale captured when a gizmo drag begins (for folding mesh.scaling). */
+  private dragStartScale: [number, number, number] = [1, 1, 1];
   private alpha = 0;
   private beta = 1.1;
   private radius = 26;
@@ -189,28 +194,40 @@ export class Editor {
       }
     }
 
-    // When a gizmo drag ends, sync the transform back to our component data
-    // and rebuild the physics collider.
+    // Capture the starting scale so the scale gizmo (which multiplies
+    // mesh.scaling) can be folded back into the absolute component scale.
+    const onGizmoDragStart = () => {
+      if (!this.selected) return;
+      this.dragStartScale = [...this.selected.props.scale];
+    };
+    // Keep the Rapier collider and hitbox wireframe glued to the mesh *while*
+    // dragging, not just when the drag ends. Otherwise the object visually
+    // moves through walls because its collision is still at the old spot.
+    const onGizmoDrag = () => this.syncBodyToMesh();
+    // On release, fold the final transform into the component data and do one
+    // clean rebuild so the collider shape exactly matches the new size.
     const onGizmoDragEnd = () => {
       if (!this.selected) return;
       const m = this.selected.mesh as BABYLON.Mesh;
-      const pos = m.position;
-      const rot = m.rotation;
-      const scl = m.scaling;
-      this.selected.props.position = [pos.x, pos.y, pos.z];
-      this.selected.props.rotation = [rot.x, rot.y, rot.z];
-      this.selected.props.scale = [scl.x, scl.y, scl.z];
-      // Rebuild physics body to match new transform.
+      const base = this.dragStartScale;
+      this.selected.props.position = [m.position.x, m.position.y, m.position.z];
+      this.selected.props.rotation = [m.rotation.x, m.rotation.y, m.rotation.z];
+      this.selected.props.scale = [
+        base[0] * m.scaling.x,
+        base[1] * m.scaling.y,
+        base[2] * m.scaling.z,
+      ];
       this.rebuild(this.selected);
-      if (this.selected === this.selected) {
-        this.hl.removeMesh(m);
-        this.hl.addMesh(m, BABYLON.Color3.FromHexString('#8fd5ff'));
-      }
+      this.hl.removeAllMeshes();
+      this.hl.addMesh(this.selected.mesh as BABYLON.Mesh, BABYLON.Color3.FromHexString('#8fd5ff'));
       this.refreshInspector();
     };
-    if (posGizmo) posGizmo.onDragEndObservable.add(onGizmoDragEnd);
-    if (rotGizmo) rotGizmo.onDragEndObservable.add(onGizmoDragEnd);
-    if (sclGizmo) sclGizmo.onDragEndObservable.add(onGizmoDragEnd);
+    for (const g of [posGizmo, rotGizmo, sclGizmo]) {
+      if (!g) continue;
+      g.onDragStartObservable?.add(onGizmoDragStart);
+      g.onDragObservable?.add(onGizmoDrag);
+      g.onDragEndObservable.add(onGizmoDragEnd);
+    }
 
     // Reference floor grid.
     const grid = BABYLON.MeshBuilder.CreateGround('editor-grid', { width: 200, height: 200 }, this.scene);
@@ -300,23 +317,33 @@ export class Editor {
    * direction, A/D strafe it, and Q/E (R/F) raise and lower the focus point.
    * The speed scales with the zoom level so it feels the same at any distance.
    */
-  private updateKeyboardCamera(dt: number) {
-    if (this.keys.size === 0) return;
-    const speed = Math.max(2, this.radius * 0.6) * dt;
-
-    // ArcRotateCamera: alpha=0 puts camera on +Z axis looking toward origin (-Z).
-    // View direction (camera -> target) projected on ground = (-sin(alpha), 0, -cos(alpha)).
-    // Right = cross(viewDir, up) = (-viewDir.z, 0, viewDir.x) = (cos(alpha), 0, -sin(alpha)).
+  /**
+   * Ground-plane forward / right vectors derived from Babylon's ArcRotateCamera
+   * position formula (camera.pure.js):
+   *   offset = (r·cosα·sinβ, r·cosβ, r·sinα·sinβ)
+   * so the view direction (camera → target) on the ground is
+   *   forward = (-cosα, 0, -sinα)
+   * and right = cross(forward, up) = (sinα, 0, -cosα).
+   * Using this exact formula keeps WASD aligned with what you see at any angle.
+   */
+  private groundBasis() {
     const forward = new BABYLON.Vector3(
-      -Math.sin(this.alpha),
-      0,
       -Math.cos(this.alpha),
+      0,
+      -Math.sin(this.alpha),
     );
     const right = new BABYLON.Vector3(
       -forward.z,
       0,
       forward.x,
     );
+    return { forward, right };
+  }
+
+  private updateKeyboardCamera(dt: number) {
+    if (this.keys.size === 0) return;
+    const speed = Math.max(2, this.radius * 0.6) * dt;
+    const { forward, right } = this.groundBasis();
 
     const move = BABYLON.Vector3.Zero();
     if (this.keys.has('KeyW')) move.addInPlace(forward.scale(1));
@@ -400,14 +427,17 @@ export class Editor {
     // Don't fight the gizmo.
     if (this.gizmoDragging || this.gizmoHovered) return;
 
+    // Compute the delta from the PREVIOUS pointer position BEFORE overwriting
+    // lastPointer. (Doing it the other way round makes dx/dy always zero, so
+    // panning and orbiting silently do nothing.)
+    const dx = e.clientX - this.lastPointer.x;
+    const dy = e.clientY - this.lastPointer.y;
     this.lastPointer = { x: e.clientX, y: e.clientY };
 
     if (!this.pointerDown) return;
 
     if (this.dragButton === 2) {
       // Right-drag: pan camera.
-      const dx = e.clientX - this.lastPointer.x;
-      const dy = e.clientY - this.lastPointer.y;
       this.panCamera(dx, dy);
       return;
     }
@@ -417,8 +447,6 @@ export class Editor {
       this.dragSelected(e);
     } else if (this.dragButton === 0 && !this.dragObject) {
       // Left-drag on empty space: orbit camera.
-      const dx = e.clientX - this.lastPointer.x;
-      const dy = e.clientY - this.lastPointer.y;
       this.orbitCamera(dx, dy);
     }
   }
@@ -602,7 +630,13 @@ export class Editor {
     try {
       const collider = instance.body.collider(0);
       const he = collider.halfExtents();
-      if (he) { hx = he.x; hy = he.y; hz = he.z; }
+      if (he) {
+        hx = he.x; hy = he.y; hz = he.z;
+        // Remember the base extents + scale so a live gizmo scale drag can
+        // resize the collider proportionally (works for plates/ramps too).
+        instance.baseHalfExtents = { x: he.x, y: he.y, z: he.z };
+        instance.baseScale = [...instance.props.scale] as [number, number, number];
+      }
     } catch { /* fall back to props */ }
 
     const box = BABYLON.MeshBuilder.CreateBox(`hitbox-${instance.id}`, {
@@ -629,6 +663,60 @@ export class Editor {
     box.material = mat;
     box.isPickable = false;
     instance.hitbox = box;
+  }
+
+  /**
+   * Live-follow the mesh during a gizmo drag: move/rotate/resize the real
+   * Rapier collider and the lime hitbox wireframe so collision never lags
+   * behind the visible object. Full rebuild happens once on drag end.
+   */
+  private syncBodyToMesh() {
+    const i = this.selected;
+    if (!i) return;
+    const m = i.mesh as BABYLON.Mesh;
+    const p = m.position;
+    const r = m.rotation;
+    const s = m.scaling;
+
+    i.props.position = [p.x, p.y, p.z];
+    i.props.rotation = [r.x, r.y, r.z];
+    i.props.scale = [
+      this.dragStartScale[0] * s.x,
+      this.dragStartScale[1] * s.y,
+      this.dragStartScale[2] * s.z,
+    ];
+
+    if (i.body) {
+      i.body.setTranslation({ x: p.x, y: p.y, z: p.z }, true);
+      const collider = i.body.collider(0);
+      if (collider) {
+        // Fixed bodies keep an identity rotation; the collider carries the
+        // orientation, so set its local rotation to the new absolute angle.
+        const q = BABYLON.Quaternion.RotationYawPitchRoll(r.y, r.x, r.z);
+        collider.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
+        const base = i.baseHalfExtents;
+        const bs = i.baseScale;
+        if (base && bs) {
+          collider.setHalfExtents({
+            x: Math.max(0.01, base.x * i.props.scale[0] / bs[0]),
+            y: Math.max(0.01, base.y * i.props.scale[1] / bs[1]),
+            z: Math.max(0.01, base.z * i.props.scale[2] / bs[2]),
+          });
+        }
+      }
+    }
+
+    if (i.hitbox) {
+      i.hitbox.position.set(p.x, p.y, p.z);
+      i.hitbox.rotation.set(r.x, r.y, r.z);
+      if (i.baseHalfExtents && i.baseScale) {
+        i.hitbox.scaling.set(
+          i.props.scale[0] / i.baseScale[0],
+          i.props.scale[1] / i.baseScale[1],
+          i.props.scale[2] / i.baseScale[2],
+        );
+      }
+    }
   }
 
   private rebuild(instance: Instance) {

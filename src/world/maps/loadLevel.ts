@@ -59,6 +59,7 @@ export function loadLevel(
   const spawn = new BABYLON.Vector3(data.spawn[0], Math.max(data.spawn[1], 0.92), data.spawn[2]);
   const gs = data.gameplaySpawn ?? data.spawn;
   const gameplaySpawn = new BABYLON.Vector3(gs[0], Math.max(gs[1], 0.92), gs[2]);
+  let playerMarker: BABYLON.Vector3 | null = null;
 
   // --- Components -----------------------------------------------------------
   for (const props of data.components) {
@@ -104,8 +105,22 @@ export function loadLevel(
       debugMeshes.push(dbg);
     }
     if (result.anchor) grappleAnchors.push(result.anchor);
-    if (result.spawn) enemySpawns.push(result.spawn);
+    // Only an ENEMY Spawn marker creates an enemy. A Player Spawn marker
+    // previously fell into this branch too, so every player marker spawned a
+    // stray guard. Player markers instead set the gameplay spawn below.
+    if (result.spawn && props.type === 'enemySpawn') enemySpawns.push(result.spawn);
+    if (result.spawn && props.type === 'playerSpawn') {
+      playerMarker = new BABYLON.Vector3(
+        result.spawn.x,
+        Math.max(result.spawn.y, 0.92),
+        result.spawn.z,
+      );
+    }
     if (result.light) lights.push(result.light);
+  }
+  if (playerMarker) {
+    gameplaySpawn.copyFrom(playerMarker);
+    spawn.copyFrom(playerMarker);
   }
   console.log(`[loadLevel] created ${bodies.length} static colliders for level "${data.name}"`);
 
