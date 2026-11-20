@@ -1,12 +1,7 @@
 # Velocity Movement Sandbox
 
 A Babylon.js + Rapier3D first-person movement sandbox built around fast, arcade-style
-traversal: a katana viewmodel, a dash, slides, wall-running, sensory-boost slow motion,
-and a committed, high-speed grappling hook.
-
-The grapple is the centrepiece — one tap fires the hook and pulls you straight at the
-locked ring at speed, with no rope simulation, no pendulum swing, and a ledge vault that
-carries you up and over the platform you hooked.
+traversal: a katana viewmodel, a dash, slides, wall-running, sensory-boost slow motion, high-speed grappling hook.
 
 ## Stack
 
