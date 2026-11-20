@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Velocity mark</title>
+  <path d="M64 0H448L512 64V448L448 512H64L0 448V64Z"
+        fill="#0B0E14" stroke="#1B2430" stroke-width="4"/>
+  <path d="M107.5 198.0 A158 158 0 0 1 392.8 173.0"
+        fill="none" stroke="#00F0FF" stroke-width="9" stroke-linecap="round"/>
+  <path d="M140 148L249 356" stroke="#FF2A3C" stroke-width="34"
+        stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M249 356L372 130" stroke="#00F0FF" stroke-width="34"
+        stroke-linecap="square" stroke-linejoin="miter"/>
+</svg>
