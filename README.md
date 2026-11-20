@@ -33,14 +33,14 @@ Animations below are generated from the in-repo gameplay captures and physics ex
       <br>
       <strong>Traversal loop</strong>
       <br>
-      <sub>Level 1 to 4 capture, from <code>website/assets/video-source/menu_levels1-4.mp4</code></sub>
+      <sub>Level 4 to 8 capture, from <code>website/assets/video-source/levels4-8.mp4</code></sub>
     </td>
     <td width="50%" valign="top">
       <a href="docs/grapple.gif"><img src="docs/grapple.gif" alt="Velocity grapple traversal" width="100%"></a>
       <br>
       <strong>Grapple lines</strong>
       <br>
-      <sub>Level 4 to 8 capture, from <code>website/assets/video-source/levels4-8.mp4</code></sub>
+      <sub>Level 1 to 4 capture, from <code>website/assets/video-source/menu_levels1-4.mp4</code></sub>
     </td>
   </tr>
   <tr>
