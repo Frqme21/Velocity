@@ -19,6 +19,10 @@ export interface GrappleAnchor {
   targeted: boolean;
   /** True while the player is tethered to this anchor. */
   attached: boolean;
+  /** Disabled anchors (a Mech that is not stunned) are invisible and untargetable. */
+  enabled: boolean;
+  /** Called when the hook lands on this anchor, before the pull starts. */
+  onGrapple?: () => void;
 }
 
 export interface GrappleTarget {
@@ -87,10 +91,16 @@ export class Grappler {
    *
    * `landing` is the platform the vault should carry the player onto.
    */
-  addAnchor(position: BABYLON.Vector3, landing: BABYLON.Vector3 | null = null, radius = 0.55) {
+  addAnchor(
+    position: BABYLON.Vector3,
+    landing: BABYLON.Vector3 | null = null,
+    radius = 0.55,
+    enabled = true,
+  ) {
     const index = this.anchors.length;
     const marker = new BABYLON.TransformNode(`grapple-anchor-${index}`, this.scene);
     marker.position.copyFrom(position);
+    marker.setEnabled(enabled);
 
     const material = new BABYLON.StandardMaterial(`grapple-anchor-material-${index}`, this.scene);
     material.emissiveColor = IDLE_COLOR;
@@ -126,6 +136,7 @@ export class Grappler {
       material,
       targeted: false,
       attached: false,
+      enabled,
     };
     this.anchors.push(anchor);
     return anchor;
@@ -144,6 +155,7 @@ export class Grappler {
     let best: GrappleTarget | null = null;
 
     for (const anchor of this.anchors) {
+      if (!anchor.enabled) continue;
       const toAnchor = anchor.position.subtract(cameraPosition);
       const distance = toAnchor.length();
       if (distance > CONFIG.MAX_RANGE || distance < 0.5) continue;
@@ -224,6 +236,8 @@ export class Grappler {
     this.tetherAnchor = target.anchor;
     this.tetherAnchor.attached = true;
     this.onFire?.(target.anchor.position.clone(), target.anchor.landing?.clone());
+    // Dynamic anchors (a stunned Mech) carry their own finisher callback.
+    target.anchor.onGrapple?.();
     return true;
   }
 
@@ -232,6 +246,21 @@ export class Grappler {
     if (this.tetherAnchor) this.tetherAnchor.attached = false;
     this.tetherAnchor = null;
     this.cooldown = CONFIG.COOLDOWN;
+  }
+
+  /**
+   * Clear all hook state immediately, without a cooldown.
+   *
+   * Used by death/reset. The controller cancels its pull when it is teleported,
+   * but that cancellation does not go through `onGrappleFinished`, so the
+   * Grappler would otherwise stay tethered to the old anchor and refuse every
+   * future `fire()` call.
+   */
+  reset() {
+    for (const anchor of this.anchors) anchor.attached = false;
+    this.tetherAnchor = null;
+    this.lastTarget = null;
+    this.cooldown = 0;
   }
 
   get isAttached() {
@@ -250,6 +279,8 @@ export class Grappler {
     const target = this.tetherAnchor ? null : this.getTarget();
 
     for (const anchor of this.anchors) {
+      anchor.marker.setEnabled(anchor.enabled);
+      if (!anchor.enabled) continue;
       anchor.targeted = anchor === this.tetherAnchor || anchor === target?.anchor;
 
       const color = anchor.attached

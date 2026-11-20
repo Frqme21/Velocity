@@ -7,14 +7,25 @@ import { createFirstLevel, type FirstLevelWorld } from '../world/maps/firstLevel
 import { loadLevel } from '../world/maps/loadLevel';
 import { IntroCinematic } from '../cinematic/IntroCinematic';
 import { KatanaViewmodel } from '../world/KatanaViewmodel';
-import { Grappler } from '../world/Grappler';
+import { Grappler, type GrappleAnchor } from '../world/Grappler';
 import { HUD } from '../ui/HUD';
 import { AudioManager } from '../audio/AudioManager';
 import { COMBAT_CONFIG } from '../config/combat';
 import { ProjectileManager } from '../combat/ProjectileManager';
 import { CombatSystem } from '../combat/CombatSystem';
+import { ShurikenSystem } from '../combat/ShurikenSystem';
+import type { MeleeEnemy } from '../entities/Enemy';
 import { PistolEnemy } from '../entities/PistolEnemy';
+import { SmgEnemy } from '../entities/SmgEnemy';
+import { MechEnemy } from '../entities/MechEnemy';
+import { SwordEliteEnemy } from '../entities/SwordEliteEnemy';
 import { MOVEMENT_CONFIG } from '../config/movement';
+import {
+  ORIGINAL_LEVEL,
+  discoverLevels,
+  fetchLevelData,
+  levelLabel,
+} from '../world/levels/campaign';
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -33,12 +44,36 @@ export class Game {
   private world!: FirstLevelWorld;
   private rapierWorld!: RAPIER.World;
   private projectiles!: ProjectileManager;
-  /** The guards that are shooting at the player. */
+  /** The shuriken ability: energy, homing stars and kill refunds. */
+  private shuriken!: ShurikenSystem;
+  /** The pistol guards that are shooting at the player. */
   private enemies: PistolEnemy[] = [];
+  /** UZI gunners placed by SMG Spawn markers. */
+  private smgEnemies: SmgEnemy[] = [];
+  /** Mech robots placed by Mech Spawn markers. */
+  private mechEnemies: MechEnemy[] = [];
+  /** The katana duelists placed by Sword Elite Spawn markers. */
+  private swordEnemies: SwordEliteEnemy[] = [];
+  /** A stunned Mech's temporary grapple point. */
+  private mechAnchors = new Map<MechEnemy, GrappleAnchor>();
   /** The opening shot, which owns the camera until it hands back control. */
   private cinematic?: IntroCinematic;
   /** Set when a ?level= JSON level is loaded instead of the first level. */
   private customLevel = false;
+  /** The ?level= name currently being played, if any. */
+  private currentLevel: string | null = null;
+  /** True when finishing a ring chains into the next playable level. */
+  private campaign = false;
+  /** First playable level in the campaign (used to place the warning). */
+  private campaignStart: string | null = null;
+  /** Playable levels after this one, in campaign order. */
+  private campaignChain: string[] = [];
+  /** Editor Play in Game: the just-saved browser copy wins over disk. */
+  private fromEditor = false;
+  /** True while the first-run Ctrl+W warning owns the screen. */
+  private warningPending = false;
+  /** True while a campaign transition is loading the next level. */
+  private transitioning = false;
   /** True after falling out of the level, until R restarts. */
   private fatal = false;
   /** True after touching a finish zone, until R restarts. */
@@ -61,6 +96,34 @@ export class Game {
   }
 
   async init() {
+    const params = new URLSearchParams(window.location.search);
+    const levelName = params.get('level');
+    const introCourse = params.get('intro') === '1';
+    // Level 1 is the hand-authored course, so ?level=level1 and ?intro=1 are
+    // two ways of asking for the same place. The chain needs that identity to
+    // avoid linking level 1 back to itself.
+    const currentName = levelName ?? (introCourse ? ORIGINAL_LEVEL : null);
+    this.fromEditor = params.get('fromEditor') === '1';
+    this.campaign = params.get('campaign') === '1';
+    this.currentLevel = currentName;
+
+    // "Play all" only visits levels that actually have a finish ring. Levels
+    // still being built are kept in the picker but skipped here, so a chain
+    // never drops the player into a dead end.
+    if (this.campaign) {
+      const entries = await discoverLevels(this.fromEditor);
+      const playable = entries.filter((entry) => entry.hasRing);
+      this.campaignStart = playable[0]?.name ?? null;
+      const index = entries.findIndex((entry) => entry.name === currentName);
+      this.campaignChain = entries
+        .filter((entry, i) => entry.hasRing && (index < 0 || i > index))
+        .map((entry) => entry.name);
+      if (index >= 0 && !entries[index].hasRing && this.campaignChain.length) {
+        window.location.replace(this.levelUrl(this.campaignChain[0]));
+        return;
+      }
+    }
+
     // `audioEngine: true` is needed for Babylon to create its audio engine.
     this.engine = new BABYLON.Engine(this.canvas, true, {
       stencil: true,
@@ -112,53 +175,19 @@ export class Game {
     this.camera.upVector.set(0, 1, 0);
     this.scene.activeCamera = this.camera;
 
-    // ?level=name loads a JSON-built level; otherwise the hand-authored
-    // first level is used. JSON levels skip the scripted intro and drop the
-    // player straight into gameplay at gameplaySpawn.
-    const params = new URLSearchParams(window.location.search);
-    const levelName = params.get('level');
-    // Play in Game tags the URL so the editor's just-saved copy wins over any
-    // older exported JSON sitting on disk. A plain ?level=name still prefers
-    // the on-disk level, with localStorage only as a fallback.
-    const fromEditor = params.get('fromEditor') === '1';
-    if (levelName) {
-      let data: unknown = null;
-      const storedRaw = localStorage.getItem(`velocity-level-${levelName}`);
-      let stored: unknown = null;
-      if (storedRaw) {
-        try {
-          stored = JSON.parse(storedRaw);
-        } catch {
-          stored = null;
-        }
-      }
-      if (fromEditor && stored !== null) {
-        data = stored;
-      }
-      if (data === null) {
-        for (const url of [
-          `/src/world/levels/${levelName}.json`,
-          `/levels/${levelName}.json`,
-        ]) {
-          try {
-            const response = await fetch(url);
-            if (response.ok) {
-              data = await response.json();
-              break;
-            }
-          } catch {
-            // Missing path or offline — try the next one.
-          }
-        }
-      }
-      if (data === null && stored !== null) data = stored;
-      if (data === null) {
-        throw new Error(`Level not found: ${levelName}.json (checked browser save, src/world/levels and /levels)`);
-      }
-      this.world = loadLevel(data as never, this.scene, this.rapierWorld, shadowGenerator);
-      this.customLevel = true;
-    } else {
+    // level1 is the hand-authored opening course (the placeholder JSON is
+    // ignored while it is being remade). ?intro=1 is its old alias. Other
+    // ?level= names load JSON; Play in Game tags the URL so the editor's
+    // just-saved copy wins over any older exported JSON on disk.
+    if (levelName === ORIGINAL_LEVEL || !levelName || introCourse) {
       this.world = createFirstLevel(this.scene, this.rapierWorld, shadowGenerator);
+    } else {
+      const data = await fetchLevelData(levelName, this.fromEditor);
+      if (!data) {
+        throw new Error(`Level not found: ${levelName}.json (checked browser save, levels/ and src/world/levels)`);
+      }
+      this.world = loadLevel(data, this.scene, this.rapierWorld, shadowGenerator);
+      this.customLevel = true;
     }
 
     this.input = new InputManager(this.canvas);
@@ -188,6 +217,17 @@ export class Game {
     );
 
     this.hud = new HUD(document.getElementById('hud')!);
+
+    // The first run shows a warning about CTRL + W: CTRL is the slide key,
+    // but CTRL + W closes the browser tab. Hold W first, then tap CTRL.
+    const firstRun = !levelName
+      || levelName === 'level1'
+      || (this.campaign && levelName === this.campaignStart);
+    if (firstRun) {
+      this.warningPending = true;
+      this.input.enabled = false;
+      this.hud.showControlWarning(() => this.onWarningDismissed());
+    }
 
     this.grappler = new Grappler(
       this.scene,
@@ -240,6 +280,23 @@ export class Game {
       this.katana,
     );
 
+    // Q throws a shuriken. The system owns the energy bar and the stars in
+    // flight; this class owns the consequences when one reaches an enemy.
+    const shurikenModel = await ShurikenSystem.loadModel(this.scene);
+    this.shuriken = new ShurikenSystem(
+      this.scene,
+      this.camera,
+      this.rapierWorld,
+      this.controller.rigidBody,
+      shurikenModel,
+    );
+    this.shuriken.onThrow = () => this.audio.play('shuriken-throw');
+    this.shuriken.onEnemyHit = (enemy, point, result) => {
+      const outcome = this.combat.hitWithShuriken(enemy, point, result);
+      // Every confirmed shuriken kill feeds the combo and the energy bar.
+      if (outcome === 'kill') this.shuriken.notifyKill();
+    };
+
     // The guards. The model is loaded once and cloned for each of them.
     const enemyModel = await PistolEnemy.loadModel(this.scene);
     for (let i = 0; i < this.world.enemySpawns.length; i++) {
@@ -258,11 +315,115 @@ export class Game {
       this.combat.registerEnemy(enemy);
     }
 
+    // UZI gunners fire short bursts. They are only loaded when placed.
+    const smgSpawns = this.world.smgSpawns ?? [];
+    if (smgSpawns.length) {
+      const smgModel = await SmgEnemy.loadModel(this.scene);
+      for (let i = 0; i < smgSpawns.length; i++) {
+        const smg = new SmgEnemy(
+          this.scene,
+          this.rapierWorld,
+          this.projectiles,
+          smgModel,
+          smgSpawns[i],
+          i,
+          this.controller.rigidBody,
+          this.world.smgFacings?.[i] ?? 0,
+        );
+        smg.onFire = () => this.audio.play('enemy-shot');
+        this.smgEnemies.push(smg);
+        this.combat.registerEnemy(smg);
+      }
+    }
+
+    // Sword Elites are the katana duelists. Their GLBs are large, so they are
+    // only loaded when the level actually places one.
+    const swordSpawns = this.world.swordEliteSpawns ?? [];
+    if (swordSpawns.length) {
+      const swordModel = await SwordEliteEnemy.loadModel(this.scene);
+      const swordKatana = await SwordEliteEnemy.loadKatana(this.scene);
+      for (let i = 0; i < swordSpawns.length; i++) {
+        const elite = new SwordEliteEnemy(
+          this.scene,
+          this.rapierWorld,
+          this.controller.rigidBody,
+          swordModel,
+          swordKatana,
+          swordSpawns[i],
+          i,
+          this.world.swordEliteFacings?.[i] ?? 0,
+        );
+        elite.onPlayerStrike = () => {
+          if (this.pendingReset || this.cinematic?.active) return;
+          this.pendingReset = true;
+          this.hud.flashDamage();
+          this.controller.triggerImpactFeedback(
+            COMBAT_CONFIG.KILL_FOV_KICK * 0.6,
+            COMBAT_CONFIG.KILL_SHAKE,
+          );
+          this.audio.play('sword-strike');
+        };
+        this.swordEnemies.push(elite);
+        this.combat.registerEnemy(elite);
+      }
+    }
+
+    // Mechs charge a laser wave. A shuriken stuns one and turns it into a
+    // temporary grapple point; hooking that point performs the execution.
+    const mechSpawns = this.world.mechSpawns ?? [];
+    if (mechSpawns.length) {
+      const mechModel = await MechEnemy.loadModel(this.scene);
+      for (let i = 0; i < mechSpawns.length; i++) {
+        const mech = new MechEnemy(
+          this.scene,
+          this.rapierWorld,
+          this.controller.rigidBody,
+          mechModel,
+          mechSpawns[i],
+          i,
+          this.world.mechFacings?.[i] ?? 0,
+        );
+        mech.onCharge = () => this.audio.play('mech-wave');
+        mech.onPlayerStrike = () => {
+          if (this.pendingReset || this.cinematic?.active) return;
+          this.pendingReset = true;
+          this.hud.flashDamage();
+        };
+        // The anchor is created disabled: it only becomes visible and
+        // targetable while the Mech is stunned by a shuriken.
+        const anchorPosition = mech.position.add(
+          new BABYLON.Vector3(0, COMBAT_CONFIG.MECH_CENTER_HEIGHT, 0),
+        );
+        const anchor = this.grappler.addAnchor(anchorPosition, null, 0.85, false);
+        anchor.onGrapple = () => {
+          if (!mech.isStunned) return;
+          this.combat.killEnemy(mech);
+          this.hitStopTimer = COMBAT_CONFIG.KILL_HITSTOP * 1.5;
+          this.hud.flashHit();
+          this.controller.triggerImpactFeedback(
+            COMBAT_CONFIG.KILL_FOV_KICK,
+            COMBAT_CONFIG.KILL_SHAKE,
+          );
+          this.audio.play('katana-slash');
+        };
+        mech.onStunChange = (stunned) => {
+          anchor.enabled = stunned && mech.isAlive;
+          anchor.marker.setEnabled(anchor.enabled);
+        };
+        this.mechAnchors.set(mech, anchor);
+        this.mechEnemies.push(mech);
+        this.combat.registerEnemy(mech);
+      }
+    }
+
     // Left mouse swings the katana. The blade animation and the hit
     // resolution are driven by the viewmodel, the hit itself by the combat
     // registry.
     this.input.onAttackPressed = () => {
       if (!this.katana.playSwing()) return;
+      // A new swing gets a fresh set of possible hits: the previous swing may
+      // have stunned a Sword Elite and must not finish it on the same input.
+      this.combat.beginSwing();
       this.audio.play('katana-swing');
       // The first frames of the swing are the parry window: from here on,
       // an incoming bolt in front of the blade gets turned around.
@@ -273,6 +434,13 @@ export class Game {
     };
     this.katana.onSwingImpact = () => this.resolveSwing();
 
+    // Q throws a shuriken. It costs half the energy bar and homes toward a
+    // target near the crosshair; a miss simply spends the energy.
+    this.input.onThrowPressed = () => {
+      if (this.cinematic?.active || this.completed || this.fatal) return;
+      this.shuriken.throw(this.combat.trackedEnemies);
+    };
+
     // A kill freezes the world for a moment and plays the sound of the
     // blade going through the guard.
     this.combat.onKill = () => {
@@ -281,6 +449,54 @@ export class Game {
       // while the screen pops.
       this.hud.flashHit();
       this.audio.play('katana-slash');
+    };
+
+    // A perfect hit is not a kill: it rings the Elite's guard open for the
+    // next swing. The stun is its own small impact so it feels deliberate.
+    this.combat.onPerfectStun = () => {
+      this.hitStopTimer = COMBAT_CONFIG.SWORD_STUN_HITSTOP;
+      this.hud.flashHit();
+      this.controller.triggerImpactFeedback(
+        COMBAT_CONFIG.PARRY_FOV_KICK,
+        COMBAT_CONFIG.PARRY_SHAKE * 0.6,
+      );
+      this.audio.play('parry');
+    };
+
+    // Out-of-time swings clang off the Elite's blade and shove the player
+    // back. No reset here: the player keeps control and can try again.
+    this.combat.onBlocked = (_point, enemy) => {
+      this.hitStopTimer = COMBAT_CONFIG.SWORD_BLOCK_HITSTOP;
+      this.controller.knockbackFrom(
+        enemy.position,
+        COMBAT_CONFIG.SWORD_BLOCK_KNOCKBACK,
+        COMBAT_CONFIG.SWORD_BLOCK_LIFT,
+      );
+      // The shove cancels an in-flight pull without notifying the hook.
+      if (this.grappler.isAttached) this.grappler.detach();
+      this.controller.triggerImpactFeedback(
+        COMBAT_CONFIG.PARRY_FOV_KICK * 0.6,
+        COMBAT_CONFIG.PARRY_SHAKE,
+      );
+      this.audio.play('sword-block');
+    };
+
+    // A shuriken stun is its own pop: the Mech's head turns cyan and its
+    // grapple ring appears. No reset - this is the execution window.
+    this.combat.onShurikenStun = () => {
+      this.hitStopTimer = COMBAT_CONFIG.SWORD_STUN_HITSTOP;
+      this.hud.flashHit();
+      this.controller.triggerImpactFeedback(
+        COMBAT_CONFIG.PARRY_FOV_KICK * 0.8,
+        COMBAT_CONFIG.PARRY_SHAKE * 0.7,
+      );
+      this.audio.play('parry');
+    };
+
+    // A duelist bats the star aside: a small clang, no kill.
+    this.combat.onShurikenBlock = () => {
+      this.hitStopTimer = COMBAT_CONFIG.SWORD_BLOCK_HITSTOP;
+      this.audio.play('sword-block');
     };
 
     // A deflect is its own little impact: freeze, punch the camera out,
@@ -330,8 +546,17 @@ export class Game {
           this.hitStopTimer = 0;
         },
       });
-      this.input.onSkipPressed = () => this.cinematic!.skip();
     }
+
+    // Space/Enter dismisses the first-run warning before it can skip a
+    // cinematic: at that point the intro has not even started yet.
+    this.input.onSkipPressed = () => {
+      if (this.hud.controlWarningActive) {
+        this.hud.dismissControlWarning();
+        return;
+      }
+      this.cinematic?.skip();
+    };
 
     (window as unknown as Record<string, unknown>).__velocity = {
       BABYLON,
@@ -344,18 +569,30 @@ export class Game {
       input: this.input,
       audio: this.audio,
       projectiles: this.projectiles,
+      shuriken: this.shuriken,
       enemies: this.enemies,
+      smgEnemies: this.smgEnemies,
+      mechEnemies: this.mechEnemies,
+      swordEnemies: this.swordEnemies,
       cinematic: this.cinematic,
       world: this.world,
       hud: this.hud,
     };
 
-    // The game starts with the opening shot; the ordinary render loop takes
-    // over the moment it finishes.
-    this.cinematic?.start();
+    // The game starts with the opening shot unless the first-run warning is
+    // still up; dismissing it starts the shot.
+    if (!this.warningPending) this.cinematic?.start();
 
     this.engine.runRenderLoop(() => {
       const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
+
+      // The first-run warning holds the whole simulation: no movement, no
+      // enemies and no cinematic until the player acknowledges it.
+      if (this.warningPending) {
+        this.world.update(dt);
+        this.scene.render();
+        return;
+      }
 
       // Level props keep moving through hit-stop and through the intro.
       this.world.update(dt);
@@ -367,6 +604,15 @@ export class Game {
         this.cinematic.update(dt);
         for (const enemy of this.enemies) {
           enemy.update(dt, 1, this.camera.position);
+        }
+        for (const smg of this.smgEnemies) {
+          smg.update(dt, 1, this.camera.position);
+        }
+        for (const mech of this.mechEnemies) {
+          mech.update(dt, 1, this.camera.position);
+        }
+        for (const elite of this.swordEnemies) {
+          elite.update(dt, 1, this.camera.position);
         }
         this.combat.update(dt);
         this.katana.update(dt, {
@@ -382,6 +628,7 @@ export class Game {
           fps: this.engine.getFps(),
           dashCharge: 1,
           meter: 1,
+          energy: this.shuriken.energyAmount,
           speedEffect: 0,
           dashing: false,
           sliding: false,
@@ -443,6 +690,32 @@ export class Game {
       for (const enemy of this.enemies) {
         enemy.update(simulationDt, worldTimeScale, playerPosition);
       }
+      for (const smg of this.smgEnemies) {
+        smg.update(simulationDt, worldTimeScale, playerPosition);
+      }
+      for (const mech of this.mechEnemies) {
+        mech.update(simulationDt, worldTimeScale, playerPosition);
+      }
+      for (const elite of this.swordEnemies) {
+        elite.update(simulationDt, worldTimeScale, playerPosition);
+      }
+
+      // Mech grapple anchors follow their robot. They are only enabled while
+      // the Mech is stunned, so no permanent ring appears in the level.
+      for (const [mech, anchor] of this.mechAnchors) {
+        anchor.position.copyFrom(
+          mech.position.add(new BABYLON.Vector3(0, COMBAT_CONFIG.MECH_CENTER_HEIGHT, 0)),
+        );
+        anchor.marker.position.copyFrom(anchor.position);
+      }
+
+      const tracked = this.combat.trackedEnemies;
+      const combatRangeSq = COMBAT_CONFIG.SHURIKEN_COMBAT_RANGE ** 2;
+      const inCombat = tracked.some(
+        (enemy) => enemy.isAlive
+          && BABYLON.Vector3.DistanceSquared(enemy.position, playerPosition) <= combatRangeSq,
+      );
+      this.shuriken.update(simulationDt, inCombat, tracked);
       this.combat.update(dt);
 
       // Touching a finish zone clears the level. Distance is measured on the
@@ -497,6 +770,7 @@ export class Game {
         meter: this.controller.isSensoryBoosting
           ? this.controller.sensoryBoostRemaining
           : this.controller.dashChargeAmount,
+        energy: this.shuriken.energyAmount,
         speedEffect: this.controller.speedEffectIntensity,
         dashing: this.controller.isDashing,
         sliding: this.controller.isSliding,
@@ -550,30 +824,40 @@ export class Game {
     const cameraPosition = this.camera.position;
     const forward = this.camera.getForwardRay().direction;
 
-    let target: PistolEnemy | null = null;
-    let bestDistance = Number.POSITIVE_INFINITY;
+    const best: { enemy: MeleeEnemy | null; distance: number } = {
+      enemy: null,
+      distance: Number.POSITIVE_INFINITY,
+    };
 
-    for (const enemy of this.enemies) {
-      if (!enemy.isAlive) continue;
+    const consider = (enemy: MeleeEnemy) => {
+      if (!enemy.isAlive) return;
+      // Never yank the player into an active duel: the Elite has to come to
+      // them. Once it is stunned, though, the finisher can lunge normally.
+      if (enemy instanceof SwordEliteEnemy && !enemy.canBeLungedAt) return;
 
       const toEnemy = enemy.center.subtract(cameraPosition);
       const distance = toEnemy.length();
-      if (distance > COMBAT_CONFIG.LUNGE_RANGE) continue;
+      if (distance > COMBAT_CONFIG.LUNGE_RANGE) return;
 
       // Only a guard the player is actually swinging at pulls them in.
       if (distance > 0.001) {
         const direction = toEnemy.scale(1 / distance);
         if (BABYLON.Vector3.Dot(direction, forward) <= COMBAT_CONFIG.LUNGE_CONE_DOT) {
-          continue;
+          return;
         }
       }
 
-      if (distance < bestDistance) {
-        target = enemy;
-        bestDistance = distance;
+      if (distance < best.distance) {
+        best.enemy = enemy;
+        best.distance = distance;
       }
-    }
+    };
 
+    for (const enemy of this.enemies) consider(enemy);
+    for (const smg of this.smgEnemies) consider(smg);
+    for (const elite of this.swordEnemies) consider(elite);
+
+    const target = best.enemy;
     if (!target) return;
 
     this.controller.lungeToward(
@@ -617,6 +901,10 @@ export class Game {
     if (this.fatal) return;
     this.fatal = true;
     this.input.enabled = false;
+    // Release the hook now, not on R: a death mid-pull must not leave the
+    // ring marked as attached behind the fatal screen.
+    this.grappler.reset();
+    this.grappler.update(0);
     this.hud.showFatalError();
   }
 
@@ -625,7 +913,51 @@ export class Game {
     if (this.completed) return;
     this.completed = true;
     this.input.enabled = false;
-    this.hud.showLevelComplete();
+
+    // In campaign mode a finish ring is a doorway into the next playable
+    // level. Ringless levels were already skipped when this level loaded.
+    const next = this.campaignChain[0];
+    if (this.campaign && next) {
+      this.transitioning = true;
+      this.hud.showLevelComplete(
+        `${levelLabel(this.currentLevel ?? '')} CLEAR`,
+        'LOADING NEXT LEVEL…',
+      );
+      window.setTimeout(() => {
+        window.location.href = this.levelUrl(next);
+      }, 900);
+      return;
+    }
+
+    this.hud.showLevelComplete(
+      this.campaign ? 'CAMPAIGN COMPLETE' : 'LEVEL COMPLETE',
+      this.campaign
+        ? 'PRESS <kbd>R</kbd> TO RUN THE FINAL LEVEL AGAIN'
+        : 'PRESS <kbd>R</kbd> TO RUN IT AGAIN',
+    );
+  }
+
+  /** Build a URL for another level, keeping the campaign/editor flags. */
+  private levelUrl(name: string): string {
+    const params = new URLSearchParams();
+    params.set('level', name);
+    if (this.campaign) params.set('campaign', '1');
+    if (this.fromEditor) params.set('fromEditor', '1');
+    return `/?${params.toString()}`;
+  }
+
+  /** Begin play once the first-run Ctrl+W warning has been acknowledged. */
+  private onWarningDismissed() {
+    if (!this.warningPending) return;
+    this.warningPending = false;
+    this.input.enabled = true;
+    if (this.customLevel) {
+      // The dismiss click/key press is a user gesture, so pointer lock can be
+      // taken here without asking for another click on the canvas.
+      this.input.requestPointerLock();
+    } else {
+      this.cinematic?.start();
+    }
   }
 
   /**
@@ -636,10 +968,16 @@ export class Game {
    * again. If R is pressed during the intro the whole shot plays again.
    */
   private resetRun() {
+    // R must not restart the old level while the next campaign level is loading.
+    if (this.transitioning) return;
     const replayIntro = this.cinematic?.active ?? false;
 
+    // Teleporting cancels the controller's pull silently; clear the hook's
+    // tether too so the next grapple works immediately after respawning.
+    this.grappler.reset();
     this.combat.respawnAll();
     this.projectiles.clear();
+    this.shuriken.reset();
     this.controller.setSpawn(this.world.spawn);
     this.controller.setPose(this.world.spawn, this.world.playerFacing, 0);
 

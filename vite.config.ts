@@ -1,9 +1,29 @@
 import { defineConfig } from 'vite';
 import wasm from 'vite-plugin-wasm';
 import path from 'path';
+import fs from 'fs';
+
+/** The eight authored levels live in /levels; ship them with the build. */
+function copyLevels() {
+  return {
+    name: 'copy-levels',
+    apply: 'build' as const,
+    closeBundle() {
+      const source = path.resolve(__dirname, 'levels');
+      const target = path.resolve(__dirname, 'dist/levels');
+      if (!fs.existsSync(source)) return;
+      fs.mkdirSync(target, { recursive: true });
+      for (const file of fs.readdirSync(source)) {
+        if (file.endsWith('.json')) {
+          fs.copyFileSync(path.join(source, file), path.join(target, file));
+        }
+      }
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [wasm()],
+  plugins: [wasm(), copyLevels()],
   server: {
     port: 5173,
     host: true,

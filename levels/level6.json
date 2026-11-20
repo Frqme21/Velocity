@@ -1,0 +1,291 @@
+{
+  "name": "level6",
+  "spawn": [
+    0,
+    0.92,
+    -8
+  ],
+  "gameplaySpawn": [
+    0,
+    0.92,
+    -8
+  ],
+  "killY": -6,
+  "components": [
+    {
+      "id": "floor-1",
+      "type": "floor",
+      "position": [
+        0,
+        0.31972482800483704,
+        -8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        16,
+        0.4,
+        16
+      ],
+      "collide": true
+    },
+    {
+      "id": "playerSpawn-1",
+      "type": "playerSpawn",
+      "position": [
+        0,
+        0.92,
+        -8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collide": true,
+      "facing": 0
+    },
+    {
+      "id": "smgSpawn-1",
+      "type": "smgSpawn",
+      "position": [
+        0,
+        0.21850095689296722,
+        42.79422378540039
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collide": true,
+      "facing": 180
+    },
+    {
+      "id": "floor-2",
+      "type": "floor",
+      "position": [
+        0.1235591322183609,
+        0.20784060657024384,
+        43.132408142089844
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        16,
+        0.4,
+        16
+      ],
+      "collide": true,
+      "material": "wooden_crate"
+    },
+    {
+      "id": "wall-1",
+      "type": "wall",
+      "position": [
+        9.485804557800293,
+        4.892311096191406,
+        17.260562896728516
+      ],
+      "rotation": [
+        0,
+        1.558016546654733,
+        0
+      ],
+      "scale": [
+        36.891771003688696,
+        8.782017707824707,
+        0.399999988043585
+      ],
+      "collide": true,
+      "material": "graffiti"
+    },
+    {
+      "id": "laserWall-1",
+      "type": "laserWall",
+      "position": [
+        8.299631118774414,
+        2,
+        12.30762004852295
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        4.254672646522522,
+        14.590511322021484,
+        0.4
+      ],
+      "collide": true
+    },
+    {
+      "id": "textBillboard-1",
+      "type": "textBillboard",
+      "position": [
+        -0.507797360420227,
+        1.9976997375488281,
+        -1.6770596504211426
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        6,
+        2,
+        1
+      ],
+      "collide": false,
+      "text": "Here is a new enemy for you.\nit uses an smg. its magazine has 10 bullets.\n wall run along the wall. u run faster then his bullets.\nthen kill him"
+    },
+    {
+      "id": "textBillboard-2",
+      "type": "textBillboard",
+      "position": [
+        -0.30265870690345764,
+        2.469191789627075,
+        50.98104476928711
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        6,
+        2,
+        1
+      ],
+      "collide": false,
+      "text": "Good work. lets do one more. shall we?.\ntry using your shurikens when u go up to him.\nvia pressing Q"
+    },
+    {
+      "id": "grappleAnchor-1",
+      "type": "grappleAnchor",
+      "position": [
+        0,
+        15.171122550964355,
+        61.812068939208984
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collide": true
+    },
+    {
+      "id": "grappleAnchor-2",
+      "type": "grappleAnchor",
+      "position": [
+        1,
+        47.83833312988281,
+        61.812068939208984
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collide": true
+    },
+    {
+      "id": "floor-3",
+      "type": "floor",
+      "position": [
+        0.39766740798950195,
+        44.300872802734375,
+        71.10958099365234
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        16,
+        0.4,
+        16
+      ],
+      "collide": true,
+      "material": "rusted_metal"
+    },
+    {
+      "id": "smgSpawn-2",
+      "type": "smgSpawn",
+      "position": [
+        0.899725615978241,
+        44.586605072021484,
+        67.69927215576172
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collide": true,
+      "facing": 180
+    },
+    {
+      "id": "levelEnd-1",
+      "type": "levelEnd",
+      "position": [
+        0,
+        44.57072830200195,
+        75.60787200927734
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        3,
+        3,
+        3
+      ],
+      "collide": true
+    }
+  ],
+  "grappleAnchors": [],
+  "enemySpawns": [],
+  "lights": [],
+  "parkour": {
+    "wallRunStrict": false,
+    "mantleStrict": false
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "untitled",
+  "spawn": [
+    0,
+    0.92,
+    0
+  ],
+  "gameplaySpawn": [
+    0,
+    0.92,
+    0
+  ],
+  "killY": -6,
+  "components": [
+    {
+      "id": "starter-floor",
+      "type": "floor",
+      "position": [
+        0,
+        -0.25,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        16,
+        0.5,
+        16
+      ],
+      "collide": true
+    }
+  ],
+  "grappleAnchors": [],
+  "enemySpawns": [],
+  "lights": [],
+  "parkour": {
+    "wallRunStrict": false,
+    "mantleStrict": false
+  }
+}

@@ -28,6 +28,18 @@ export interface GrayboxWorld {
   enemySpawns: BABYLON.Vector3[];
   /** Initial yaw (radians) for each guard, indexed like enemySpawns. */
   enemyFacings: number[];
+  /** Katana duelists, when the level places any Sword Elite Spawn markers. */
+  swordEliteSpawns?: BABYLON.Vector3[];
+  /** Initial yaw (radians) for each Sword Elite, indexed like the spawns. */
+  swordEliteFacings?: number[];
+  /** UZI gunners, when the level places any SMG Spawn markers. */
+  smgSpawns?: BABYLON.Vector3[];
+  /** Initial yaw (radians) for each SMG gunner, indexed like the spawns. */
+  smgFacings?: number[];
+  /** Mech robots, when the level places any Mech Spawn markers. */
+  mechSpawns?: BABYLON.Vector3[];
+  /** Initial yaw (radians) for each Mech, indexed like the spawns. */
+  mechFacings?: number[];
   /** Initial yaw (radians) for the player spawn. */
   playerFacing: number;
   /** Finish zones placed in the level (empty when none are authored). */

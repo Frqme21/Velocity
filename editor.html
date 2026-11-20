@@ -4,55 +4,92 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Velocity — Level Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,500;0,600;0,700;1,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <script>
+    try {
+      var mode = localStorage.getItem('velocity-ui-theme');
+      if (mode === 'tactical' || mode === 'slick' || mode === 'daylight') {
+        document.documentElement.classList.add('mode-' + mode);
+      }
+    } catch (e) {}
+  </script>
   <link rel="stylesheet" href="/src/editor/editor.css">
 </head>
 <body>
+  <header class="editor-top-bar top-app-bar">
+    <div class="brand-block">
+      <span class="brand-eyebrow">VELOCITY // LEVEL EDITOR</span>
+      <span class="brand-title">BUILDER <span>TOOLS</span></span>
+    </div>
+    <div class="theme-switcher" role="group" aria-label="UI theme">
+      <button type="button" class="theme-btn" data-theme-mode="tactical">TACTICAL</button>
+      <button type="button" class="theme-btn" data-theme-mode="slick">SLICK</button>
+      <button type="button" class="theme-btn" data-theme-mode="daylight">DAYLIGHT</button>
+    </div>
+    <span id="status" class="status status-pill status-online">Ready</span>
+  </header>
+
   <div class="toolbar">
     <div class="toolbar-group">
-      <label>Level</label>
+      <label for="level-name">Level</label>
       <input id="level-name" type="text" value="" placeholder="level name (e.g. example)">
     </div>
-    <div class="toolbar-group">
-      <button id="btn-new">New</button>
-      <button id="btn-save">Save</button>
-      <button id="btn-load">Load</button>
-      <button id="btn-delete-saved" title="Forget the browser copy of this level">Delete Browser Save</button>
-      <button id="btn-duplicate" title="Duplicate selection (Ctrl+D)">Duplicate</button>
-      <button id="btn-export">Export JSON</button>
-      <button id="btn-copy">Copy JSON</button>
-      <button id="btn-play" class="primary">Play in Game</button>
+    <div class="toolbar-group action-group">
+      <button id="btn-new" class="m3-btn m3-btn-outlined m3-btn-skew">New</button>
+      <button id="btn-save" class="m3-btn m3-btn-tonal m3-btn-skew">Save</button>
+      <button id="btn-load" class="m3-btn m3-btn-outlined m3-btn-skew">Load</button>
+      <button id="btn-delete-saved" class="m3-btn m3-btn-text" title="Forget the browser copy of this level">Delete Browser Save</button>
+      <button id="btn-duplicate" class="m3-btn m3-btn-outlined m3-btn-skew" title="Duplicate selection (Ctrl+D)">Duplicate</button>
+      <button id="btn-export" class="m3-btn m3-btn-outlined m3-btn-skew">Export JSON</button>
+      <button id="btn-copy" class="m3-btn m3-btn-text">Copy JSON</button>
+      <button id="btn-play" class="m3-btn m3-btn-filled m3-btn-skew primary">Play in Game</button>
     </div>
-    <div class="toolbar-group">
-      <button id="btn-gizmo-move" title="Move (W)">Move</button>
-      <button id="btn-gizmo-rotate" title="Rotate (E)">Rotate</button>
-      <button id="btn-gizmo-scale" title="Scale (R)">Scale</button>
+    <div class="toolbar-group gizmo-group">
+      <button id="btn-gizmo-move" class="m3-chip active" title="Move (W)">Move</button>
+      <button id="btn-gizmo-rotate" class="m3-chip" title="Rotate (E)">Rotate</button>
+      <button id="btn-gizmo-scale" class="m3-chip" title="Scale (R)">Scale</button>
     </div>
-    <div class="toolbar-group">
+    <div class="toolbar-group strict-group">
       <label class="check"><input id="wallrun-strict" type="checkbox"> Wall-run only on tagged surfaces</label>
       <label class="check"><input id="mantle-strict" type="checkbox"> Mantle only on tagged surfaces</label>
     </div>
-    <div class="toolbar-group">
-      <span id="status" class="status">Ready</span>
-    </div>
   </div>
 
-  <div class="workspace">
-    <aside class="panel panel-left">
-      <div class="panel-title">Components</div>
-      <div class="palette" id="palette"></div>
-    </aside>
+  <div class="editor-body">
+    <nav class="editor-rail" aria-label="Editor tools">
+      <div class="rail-brand" title="Velocity Editor">V</div>
+      <button type="button" class="rail-link" data-tool="btn-new"><span class="rail-pill">N</span><span>NEW</span></button>
+      <button type="button" class="rail-link" data-tool="btn-save"><span class="rail-pill">S</span><span>SAVE</span></button>
+      <button type="button" class="rail-link" data-tool="btn-load"><span class="rail-pill">L</span><span>LOAD</span></button>
+      <button type="button" class="rail-link" data-tool="btn-duplicate"><span class="rail-pill">D</span><span>DUPE</span></button>
+      <button type="button" class="rail-link" data-tool="btn-export"><span class="rail-pill">J</span><span>JSON</span></button>
+      <button type="button" class="rail-link" data-tool="btn-gizmo-move"><span class="rail-pill">1</span><span>MOVE</span></button>
+      <button type="button" class="rail-link" data-tool="btn-gizmo-rotate"><span class="rail-pill">2</span><span>ROT</span></button>
+      <button type="button" class="rail-link" data-tool="btn-gizmo-scale"><span class="rail-pill">3</span><span>SCALE</span></button>
+      <button type="button" class="rail-link play" data-tool="btn-play"><span class="rail-pill">▶</span><span>PLAY</span></button>
+      <a class="rail-link" href="/" title="Back to level select"><span class="rail-pill">⌂</span><span>MENU</span></a>
+    </nav>
 
-    <div class="viewport" id="viewport">
-      <canvas id="editor-canvas"></canvas>
-      <div class="view-hint">Left-click to select &bull; Left-drag to move &bull; Right-drag to pan &bull; Scroll to zoom &bull; WASD to fly &bull; Q/E for up/down &bull; Ctrl+D to duplicate &bull; Markers &rarr; Level End sets the finish zone (scale X = radius) &bull; Walls &rarr; Laser Wall kills &amp; respawns on touch</div>
-    </div>
+    <div class="workspace">
+      <aside class="panel panel-left">
+        <div class="panel-title"><span class="section-index">01</span> COMPONENTS</div>
+        <div class="palette" id="palette"></div>
+      </aside>
 
-    <aside class="panel panel-right">
-      <div class="panel-title">Inspector</div>
-      <div class="inspector" id="inspector">
-        <div class="empty">Select a component to edit it.</div>
+      <div class="viewport" id="viewport">
+        <canvas id="editor-canvas"></canvas>
+        <div class="view-hint">Left-click to select &bull; Left-drag to move &bull; Right-drag to pan &bull; Scroll to zoom &bull; WASD to fly &bull; Q/E for up/down &bull; Ctrl+D to duplicate &bull; Markers &rarr; Level End sets the finish zone (scale X = radius) &bull; Walls &rarr; Laser Wall kills &amp; respawns on touch</div>
       </div>
-    </aside>
+
+      <aside class="panel panel-right">
+        <div class="panel-title"><span class="section-index">02</span> INSPECTOR</div>
+        <div class="inspector" id="inspector">
+          <div class="empty">Select a component to edit it.</div>
+        </div>
+      </aside>
+    </div>
   </div>
 
   <script type="module" src="/src/editor/editor.ts"></script>

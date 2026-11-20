@@ -1,0 +1,3923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GR-74 // MATERIAL 3 + GHOSTRUNNER TACTICAL UI SYSTEM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,400;0,600;0,700;1,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* ==========================================================================
+       01. MATERIAL 3 + TACTICAL DESIGN TOKENS (8PX GRID SYSTEM)
+       ========================================================================== */
+    :root {
+      /* Core Surface & Elevation Tokens (Tactical Dark Default) */
+      --md-sys-color-background: #07080a;
+      --md-sys-color-on-background: #edf2f7;
+      --md-sys-color-surface: #0b0d11;
+      --md-sys-color-surface-container-lowest: #050608;
+      --md-sys-color-surface-container-low: #0e1116;
+      --md-sys-color-surface-container: #12161d;
+      --md-sys-color-surface-container-high: #171c25;
+      --md-sys-color-surface-container-highest: #1d232f;
+      --md-sys-color-on-surface: #edf2f7;
+      --md-sys-color-on-surface-variant: #8b98ad;
+      --md-sys-color-outline: #364152;
+      --md-sys-color-outline-variant: #222936;
+
+      /* Primary, Secondary, Tertiary & Semantic Accents */
+      --md-sys-color-primary: #ff2a3c;
+      --md-sys-color-on-primary: #ffffff;
+      --md-sys-color-primary-container: rgba(255, 42, 60, 0.16);
+      --md-sys-color-on-primary-container: #ff8a94;
+      --glow-primary: rgba(255, 42, 60, 0.35);
+
+      --md-sys-color-secondary: #00f0ff;
+      --md-sys-color-on-secondary: #041214;
+      --md-sys-color-secondary-container: rgba(0, 240, 255, 0.14);
+      --md-sys-color-on-secondary-container: #7df7ff;
+      --glow-secondary: rgba(0, 240, 255, 0.3);
+
+      --md-sys-color-tertiary: #ffb800;
+      --md-sys-color-on-tertiary: #1a1100;
+      --md-sys-color-tertiary-container: rgba(255, 184, 0, 0.16);
+      --md-sys-color-on-tertiary-container: #ffd875;
+
+      --md-sys-color-error: #ff4d5e;
+      --md-sys-color-error-container: rgba(255, 77, 94, 0.16);
+      --md-sys-color-success: #00e676;
+      --md-sys-color-success-container: rgba(0, 230, 118, 0.14);
+
+      /* Typography Families */
+      --font-display: 'Chakra Petch', sans-serif;
+      --font-sans: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+
+      /* Motion Curves */
+      --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+      /* Adaptive Theme Geometry (Tactical Chamfered Default) */
+      --shape-panel-clip: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+      --shape-panel-radius: 0px;
+      --shape-card-clip: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+      --shape-card-radius: 0px;
+      --shape-btn-skew: -16deg;
+      --shape-btn-unskew: 16deg;
+      --shape-btn-radius: 0px;
+      --shape-btn-chamfer: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+      --shape-input-clip: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+      --shape-input-radius: 0px;
+      --shape-chip-skew: -14deg;
+      --shape-chip-unskew: 14deg;
+      --shape-chip-radius: 0px;
+      --shape-track-skew: -20deg;
+      --shape-track-radius: 0px;
+      --shape-fab-clip: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+      --shape-fab-radius: 0px;
+
+      /* Atmosphere Controls */
+      --scanline-opacity: 0.85;
+      --grid-opacity: 0.035;
+      --header-italic: italic;
+    }
+
+    /* ==========================================================================
+       MODE 2: MINIMAL SLICK (PURE MATERIAL 3 PRECISION DARK)
+       ========================================================================== */
+    body.mode-slick {
+      --md-sys-color-background: #0b0d11;
+      --md-sys-color-surface: #0f1217;
+      --md-sys-color-surface-container-lowest: #080a0d;
+      --md-sys-color-surface-container-low: #13171e;
+      --md-sys-color-surface-container: #171c24;
+      --md-sys-color-surface-container-high: #1e242f;
+      --md-sys-color-surface-container-highest: #252c39;
+      --md-sys-color-outline: rgba(255, 255, 255, 0.16);
+      --md-sys-color-outline-variant: rgba(255, 255, 255, 0.08);
+
+      --md-sys-color-primary: #ff5261;
+      --glow-primary: rgba(255, 82, 97, 0.14);
+      --md-sys-color-secondary: #4deeff;
+      --glow-secondary: rgba(77, 238, 255, 0.14);
+
+      --font-display: 'Inter', sans-serif;
+
+      /* Smooth M3 Radii */
+      --shape-panel-clip: none;
+      --shape-panel-radius: 24px;
+      --shape-card-clip: none;
+      --shape-card-radius: 16px;
+      --shape-btn-skew: 0deg;
+      --shape-btn-unskew: 0deg;
+      --shape-btn-radius: 9999px;
+      --shape-btn-chamfer: none;
+      --shape-input-clip: none;
+      --shape-input-radius: 12px;
+      --shape-chip-skew: 0deg;
+      --shape-chip-unskew: 0deg;
+      --shape-chip-radius: 8px;
+      --shape-track-skew: 0deg;
+      --shape-track-radius: 9999px;
+      --shape-fab-clip: none;
+      --shape-fab-radius: 16px;
+
+      --scanline-opacity: 0;
+      --grid-opacity: 0;
+      --header-italic: normal;
+    }
+
+    /* ==========================================================================
+       MODE 3: DAYLIGHT LAB (HIGH-CONTRAST M3 LIGHT THEME)
+       ========================================================================== */
+    body.mode-daylight {
+      --md-sys-color-background: #f4f6fa;
+      --md-sys-color-on-background: #0f172a;
+      --md-sys-color-surface: #ffffff;
+      --md-sys-color-surface-container-lowest: #ffffff;
+      --md-sys-color-surface-container-low: #f8fafc;
+      --md-sys-color-surface-container: #eef2f7;
+      --md-sys-color-surface-container-high: #e2e8f0;
+      --md-sys-color-surface-container-highest: #cbd5e1;
+      --md-sys-color-on-surface: #0f172a;
+      --md-sys-color-on-surface-variant: #475569;
+      --md-sys-color-outline: #94a3b8;
+      --md-sys-color-outline-variant: #cbd5e1;
+
+      --md-sys-color-primary: #d91b2c;
+      --md-sys-color-on-primary: #ffffff;
+      --md-sys-color-primary-container: #ffe4e6;
+      --md-sys-color-on-primary-container: #9f1239;
+      --glow-primary: rgba(217, 27, 44, 0.14);
+
+      --md-sys-color-secondary: #0284c7;
+      --md-sys-color-on-secondary: #ffffff;
+      --md-sys-color-secondary-container: #e0f2fe;
+      --md-sys-color-on-secondary-container: #075985;
+      --glow-secondary: rgba(2, 132, 199, 0.14);
+
+      --md-sys-color-tertiary: #d97706;
+      --md-sys-color-on-tertiary: #ffffff;
+      --md-sys-color-tertiary-container: #fef3c7;
+      --md-sys-color-on-tertiary-container: #92400e;
+
+      --font-display: 'Inter', sans-serif;
+
+      --shape-panel-clip: none;
+      --shape-panel-radius: 24px;
+      --shape-card-clip: none;
+      --shape-card-radius: 16px;
+      --shape-btn-skew: 0deg;
+      --shape-btn-unskew: 0deg;
+      --shape-btn-radius: 9999px;
+      --shape-btn-chamfer: none;
+      --shape-input-clip: none;
+      --shape-input-radius: 12px;
+      --shape-chip-skew: 0deg;
+      --shape-chip-unskew: 0deg;
+      --shape-chip-radius: 8px;
+      --shape-track-skew: 0deg;
+      --shape-track-radius: 9999px;
+      --shape-fab-clip: none;
+      --shape-fab-radius: 16px;
+
+      --scanline-opacity: 0;
+      --grid-opacity: 0;
+      --header-italic: normal;
+    }
+
+    /* ==========================================================================
+       02. RESET & BASE LAYOUT (8PX GRID)
+       ========================================================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      overflow-x: hidden;
+    }
+
+    body {
+      background-color: var(--md-sys-color-background);
+      background-image:
+        linear-gradient(rgba(0, 240, 255, var(--grid-opacity)) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 240, 255, var(--grid-opacity)) 1px, transparent 1px);
+      background-size: 32px 32px;
+      color: var(--md-sys-color-on-background);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      min-height: 100vh;
+      overflow-x: hidden;
+      transition: background-color 0.35s var(--ease-out-expo), color 0.35s var(--ease-out-expo);
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.14) 0px,
+        rgba(0, 0, 0, 0.14) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+      pointer-events: none;
+      z-index: 9999;
+      opacity: var(--scanline-opacity);
+      transition: opacity 0.35s var(--ease-out-expo);
+    }
+
+    /* App Shell Layout: Sticky Left Rail + Main Fluid Content */
+    .app-shell {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .nav-rail-desktop {
+      width: 88px;
+      flex-shrink: 0;
+      background: var(--md-sys-color-surface-container-low);
+      border-right: 1px solid var(--md-sys-color-outline-variant);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 8px;
+      gap: 8px;
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    @media (max-width: 960px) {
+      .nav-rail-desktop {
+        display: none;
+      }
+    }
+
+    .rail-brand {
+      width: 48px;
+      height: 48px;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 0.85rem;
+      border-radius: var(--shape-fab-radius);
+      clip-path: var(--shape-fab-clip);
+      margin-bottom: 16px;
+      flex-shrink: 0;
+    }
+
+    .rail-link {
+      width: 72px;
+      min-height: 56px;
+      border-radius: 12px;
+      text-decoration: none;
+      color: var(--md-sys-color-on-surface-variant);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      font-weight: 600;
+      text-align: center;
+      transition: all 0.25s var(--ease-out-expo);
+      padding: 4px;
+    }
+
+    .rail-pill {
+      width: 48px;
+      height: 28px;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.25s var(--ease-out-expo);
+    }
+
+    .rail-link:hover, .rail-link.active {
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .rail-link.active .rail-pill, .rail-link:hover .rail-pill {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-secondary);
+    }
+
+    .main-viewport {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Sticky Top App Bar */
+    .top-app-bar {
+      position: sticky;
+      top: 0;
+      z-index: 90;
+      background: color-mix(in srgb, var(--md-sys-color-surface) 88%, transparent);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      padding: 16px clamp(16px, 3vw, 32px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .brand-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .brand-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.16em;
+      color: var(--md-sys-color-primary);
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .brand-title {
+      font-family: var(--font-display);
+      font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+      font-weight: 700;
+      font-style: var(--header-italic);
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      line-height: 1.15;
+    }
+
+    .brand-title span {
+      color: var(--md-sys-color-secondary);
+    }
+
+    /* Global Component Search Input */
+    .global-search-box {
+      position: relative;
+      flex: 1;
+      min-width: 220px;
+      max-width: 360px;
+    }
+
+    .global-search-input {
+      width: 100%;
+      height: 44px;
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 9999px;
+      padding: 0 40px 0 40px;
+      color: var(--md-sys-color-on-surface);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      outline: none;
+      transition: all 0.25s var(--ease-out-expo);
+    }
+
+    .global-search-input:focus {
+      border-color: var(--md-sys-color-secondary);
+      box-shadow: 0 0 0 3px var(--md-sys-color-secondary-container);
+    }
+
+    .global-search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--md-sys-color-on-surface-variant);
+      pointer-events: none;
+    }
+
+    .global-search-clear {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: var(--md-sys-color-on-surface-variant);
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .global-search-clear.visible {
+      display: flex;
+    }
+
+    /* 3-Mode Theme Switcher */
+    .theme-switcher {
+      display: inline-flex;
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      padding: 4px;
+      border-radius: 9999px;
+      gap: 4px;
+    }
+
+    .theme-btn {
+      min-height: 44px;
+      padding: 0 16px;
+      border: none;
+      background: transparent;
+      color: var(--md-sys-color-on-surface-variant);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      border-radius: 9999px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.28s var(--ease-out-expo);
+    }
+
+    .theme-btn.active {
+      background: var(--md-sys-color-secondary);
+      color: var(--md-sys-color-on-secondary);
+      box-shadow: 0 2px 12px var(--glow-secondary);
+    }
+
+    .theme-btn:hover:not(.active) {
+      color: var(--md-sys-color-on-surface);
+      background: var(--md-sys-color-surface-container-high);
+    }
+
+    /* Quick Category Jump Strip */
+    .jump-strip {
+      background: var(--md-sys-color-surface-container-low);
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      padding: 8px clamp(16px, 3vw, 32px);
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .jump-strip::-webkit-scrollbar {
+      display: none;
+    }
+
+    .jump-pill {
+      min-height: 36px;
+      padding: 0 14px;
+      border-radius: 9999px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      background: var(--md-sys-color-surface-container);
+      color: var(--md-sys-color-on-surface-variant);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s var(--ease-out-expo);
+    }
+
+    .jump-pill:hover {
+      border-color: var(--md-sys-color-secondary);
+      color: var(--md-sys-color-secondary);
+      background: var(--md-sys-color-secondary-container);
+    }
+
+    /* Content Container */
+    .content-wrapper {
+      max-width: 1440px;
+      width: 100%;
+      margin: 0 auto;
+      padding: clamp(16px, 3vw, 32px);
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    /* Component Module Section */
+    .component-section {
+      background: var(--md-sys-color-surface-container-low);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      padding: 24px;
+      position: relative;
+      clip-path: var(--shape-panel-clip);
+      border-radius: var(--shape-panel-radius);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      scroll-margin-top: 136px;
+      transition: all 0.35s var(--ease-out-expo);
+    }
+
+    .component-section.hidden-by-filter {
+      display: none;
+    }
+
+    .component-section::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 48px;
+      height: 3px;
+      background: var(--md-sys-color-primary);
+      transition: opacity 0.25s ease;
+    }
+
+    body.mode-slick .component-section::before,
+    body.mode-daylight .component-section::before {
+      opacity: 0;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      padding-bottom: 16px;
+    }
+
+    .section-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .section-index {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--md-sys-color-secondary);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .section-heading {
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    body.mode-slick .section-heading,
+    body.mode-daylight .section-heading {
+      text-transform: none;
+      letter-spacing: -0.01em;
+    }
+
+    .inspect-btn {
+      min-height: 44px;
+      padding: 0 16px;
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 9999px;
+      color: var(--md-sys-color-on-surface);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s var(--ease-out-expo);
+    }
+
+    .inspect-btn:hover {
+      border-color: var(--md-sys-color-secondary);
+      color: var(--md-sys-color-secondary);
+      background: var(--md-sys-color-secondary-container);
+    }
+
+    /* Layout Helpers */
+    .sub-grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    .sub-grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 24px;
+    }
+
+    .demo-box {
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      padding: 20px;
+      border-radius: var(--shape-card-radius);
+      clip-path: var(--shape-card-clip);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .demo-label {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--md-sys-color-on-surface-variant);
+      font-weight: 700;
+    }
+
+    .flex-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .flex-col {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ==========================================================================
+       FAMILY 01: TYPOGRAPHY & COLOR TOKEN SYSTEM
+       ========================================================================== */
+    .type-scale-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .type-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+    }
+
+    .type-meta {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    .token-swatches {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+    }
+
+    .token-card {
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--md-sys-color-surface-container);
+      cursor: pointer;
+      transition: transform 0.2s var(--ease-out-expo), border-color 0.2s ease;
+    }
+
+    .token-card:hover {
+      transform: translate3d(0, -2px, 0);
+      border-color: var(--md-sys-color-secondary);
+    }
+
+    .token-swatch-color {
+      height: 56px;
+      width: 100%;
+      display: flex;
+      align-items: flex-end;
+      padding: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      font-weight: 700;
+    }
+
+    .token-info {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .token-name {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .token-var {
+      font-family: var(--font-mono);
+      font-size: 0.64rem;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    /* ==========================================================================
+       FAMILY 02: M3 BUTTONS & ICON BUTTONS
+       ========================================================================== */
+    .m3-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 10px 24px;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--md-sys-color-on-surface);
+      border-radius: var(--shape-btn-radius);
+      transition: all 0.25s var(--ease-out-expo);
+      user-select: none;
+    }
+
+    body.mode-slick .m3-btn,
+    body.mode-daylight .m3-btn {
+      font-family: var(--font-sans);
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      text-transform: none;
+    }
+
+    .m3-btn-skew {
+      transform: skewX(var(--shape-btn-skew));
+    }
+
+    .m3-btn-skew > * {
+      transform: skewX(var(--shape-btn-unskew));
+    }
+
+    /* Filled */
+    .m3-btn-filled {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      box-shadow: 0 4px 16px var(--glow-primary);
+    }
+
+    .m3-btn-filled:hover {
+      filter: brightness(1.08);
+      transform: skewX(var(--shape-btn-skew)) translate3d(0, -2px, 0);
+    }
+
+    /* Filled Tonal */
+    .m3-btn-tonal {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-secondary);
+      border-color: color-mix(in srgb, var(--md-sys-color-secondary) 28%, transparent);
+    }
+
+    .m3-btn-tonal:hover {
+      background: color-mix(in srgb, var(--md-sys-color-secondary) 24%, transparent);
+      transform: skewX(var(--shape-btn-skew)) translate3d(0, -2px, 0);
+    }
+
+    /* Outlined */
+    .m3-btn-outlined {
+      border-color: var(--md-sys-color-outline);
+      color: var(--md-sys-color-secondary);
+    }
+
+    .m3-btn-outlined:hover {
+      background: var(--md-sys-color-secondary-container);
+      border-color: var(--md-sys-color-secondary);
+    }
+
+    /* Elevated / Chamfered */
+    .m3-btn-elevated {
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface);
+      border-color: var(--md-sys-color-outline-variant);
+      clip-path: var(--shape-btn-chamfer);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+
+    .m3-btn-elevated:hover {
+      background: var(--md-sys-color-surface-container-highest);
+      transform: translate3d(0, -2px, 0);
+    }
+
+    /* Text Button */
+    .m3-btn-text {
+      color: var(--md-sys-color-secondary);
+      padding: 10px 16px;
+    }
+
+    .m3-btn-text:hover {
+      background: var(--md-sys-color-secondary-container);
+    }
+
+    .m3-btn:disabled {
+      opacity: 0.42;
+      pointer-events: none;
+    }
+
+    /* Icon Buttons (44x44 touch target) */
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--shape-btn-radius);
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--md-sys-color-on-surface-variant);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s var(--ease-out-expo);
+    }
+
+    .icon-btn:hover {
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .icon-btn.filled {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+    }
+
+    .icon-btn.tonal {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-secondary);
+    }
+
+    .icon-btn.outlined {
+      border-color: var(--md-sys-color-outline);
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .icon-btn.toggle-active {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      border-color: var(--md-sys-color-primary);
+    }
+
+    /* Split Button */
+    .split-btn-group {
+      display: inline-flex;
+      position: relative;
+    }
+
+    .split-btn-main {
+      border-top-right-radius: 0 !important;
+      border-bottom-right-radius: 0 !important;
+      border-right: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
+    .split-btn-arrow {
+      min-width: 44px;
+      padding: 0 12px;
+      border-top-left-radius: 0 !important;
+      border-bottom-left-radius: 0 !important;
+    }
+
+    /* ==========================================================================
+       FAMILY 03: SEGMENTED BUTTONS & FABS
+       ========================================================================== */
+    .segmented-btn-row {
+      display: inline-flex;
+      border: 1px solid var(--md-sys-color-outline);
+      border-radius: var(--shape-btn-radius);
+      overflow: hidden;
+      background: var(--md-sys-color-surface-container-low);
+    }
+
+    .seg-option {
+      min-height: 44px;
+      padding: 0 18px;
+      border: none;
+      border-right: 1px solid var(--md-sys-color-outline-variant);
+      background: transparent;
+      color: var(--md-sys-color-on-surface-variant);
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s var(--ease-out-expo);
+    }
+
+    .seg-option:last-child {
+      border-right: none;
+    }
+
+    .seg-option.selected {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-secondary);
+    }
+
+    .seg-option .check-mark {
+      display: none;
+    }
+
+    .seg-option.selected .check-mark {
+      display: inline-flex;
+    }
+
+    /* M3 FAB Variants */
+    .m3-fab {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      border: none;
+      cursor: pointer;
+      font-family: var(--font-display);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: var(--md-sys-color-tertiary);
+      color: var(--md-sys-color-on-tertiary);
+      clip-path: var(--shape-fab-clip);
+      border-radius: var(--shape-fab-radius);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+      transition: all 0.25s var(--ease-out-expo);
+    }
+
+    .m3-fab:hover {
+      transform: translate3d(0, -3px, 0);
+      filter: brightness(1.06);
+    }
+
+    .fab-small { width: 44px; height: 44px; }
+    .fab-standard { width: 56px; height: 56px; }
+    .fab-large { width: 72px; height: 72px; }
+    .fab-extended {
+      height: 56px;
+      padding: 0 24px;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .fab-extended.collapsed {
+      width: 56px;
+      padding: 0;
+    }
+
+    .fab-extended.collapsed .fab-label {
+      display: none;
+    }
+
+    /* ==========================================================================
+       FAMILY 04: M3 TEXT FIELDS, SEARCH & SELECT
+       ========================================================================== */
+    .m3-field {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .m3-field-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+      min-height: 56px;
+      background: var(--md-sys-color-surface-container-high);
+      border-bottom: 2px solid var(--md-sys-color-outline);
+      border-radius: 8px 8px 0 0;
+      padding: 0 14px;
+      transition: all 0.2s var(--ease-out-expo);
+    }
+
+    .m3-field-box.outlined {
+      background: transparent;
+      border: 1px solid var(--md-sys-color-outline);
+      border-radius: var(--shape-input-radius);
+      clip-path: var(--shape-input-clip);
+    }
+
+    .m3-field-box:focus-within {
+      border-color: var(--md-sys-color-secondary);
+      box-shadow: 0 0 0 2px var(--md-sys-color-secondary-container);
+    }
+
+    .m3-field-box.error {
+      border-color: var(--md-sys-color-error);
+    }
+
+    .m3-field-input {
+      flex: 1;
+      width: 100%;
+      min-height: 44px;
+      padding-top: 14px;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--md-sys-color-on-surface);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+    }
+
+    .m3-field-box.outlined .m3-field-input {
+      padding-top: 0;
+    }
+
+    .m3-floating-label {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--md-sys-color-on-surface-variant);
+      pointer-events: none;
+      transition: all 0.2s var(--ease-out-expo);
+    }
+
+    .m3-field-box.has-leading .m3-floating-label {
+      left: 42px;
+    }
+
+    .m3-field-input:focus ~ .m3-floating-label,
+    .m3-field-input:not(:placeholder-shown) ~ .m3-floating-label {
+      top: 10px;
+      transform: translateY(0);
+      font-size: 0.64rem;
+      color: var(--md-sys-color-secondary);
+      font-weight: 700;
+    }
+
+    .m3-field-box.outlined .m3-field-input:focus ~ .m3-floating-label,
+    .m3-field-box.outlined .m3-field-input:not(:placeholder-shown) ~ .m3-floating-label {
+      top: -9px;
+      left: 10px;
+      background: var(--md-sys-color-surface-container);
+      padding: 0 6px;
+    }
+
+    .field-supporting {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--md-sys-color-on-surface-variant);
+      padding: 0 4px;
+    }
+
+    .field-supporting.error {
+      color: var(--md-sys-color-error);
+    }
+
+    /* Autocomplete Search Dropdown */
+    .autocomplete-wrap {
+      position: relative;
+    }
+
+    .autocomplete-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: var(--md-sys-color-surface-container-highest);
+      border: 1px solid var(--md-sys-color-outline);
+      border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      z-index: 40;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .autocomplete-menu.open {
+      display: flex;
+    }
+
+    .autocomplete-item {
+      min-height: 44px;
+      padding: 10px 16px;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      color: var(--md-sys-color-on-surface);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .autocomplete-item:hover {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-secondary);
+    }
+
+    /* ==========================================================================
+       FAMILY 05: SELECTION CONTROLS (SWITCHES, CHECKBOXES, RADIOS, RATING)
+       ========================================================================== */
+    .control-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 44px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      user-select: none;
+    }
+
+    .control-item input {
+      display: none;
+    }
+
+    /* M3 Switch */
+    .m3-switch-track {
+      width: 52px;
+      height: 30px;
+      background: var(--md-sys-color-surface-container-highest);
+      border: 2px solid var(--md-sys-color-outline);
+      border-radius: var(--shape-btn-radius);
+      transform: skewX(var(--shape-btn-skew));
+      position: relative;
+      transition: all 0.25s var(--ease-out-expo);
+    }
+
+    .m3-switch-thumb {
+      position: absolute;
+      top: 3px;
+      left: 4px;
+      width: 20px;
+      height: 20px;
+      background: var(--md-sys-color-outline);
+      border-radius: var(--shape-btn-radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--md-sys-color-surface);
+      transition: all 0.25s var(--ease-out-expo);
+    }
+
+    .control-item input:checked + .m3-switch-track {
+      background: var(--md-sys-color-primary);
+      border-color: var(--md-sys-color-primary);
+    }
+
+    .control-item input:checked + .m3-switch-track .m3-switch-thumb {
+      left: 24px;
+      background: var(--md-sys-color-on-primary);
+      color: var(--md-sys-color-primary);
+    }
+
+    /* M3 Checkbox */
+    .m3-checkbox-box {
+      width: 22px;
+      height: 22px;
+      border: 2px solid var(--md-sys-color-outline);
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s var(--ease-out-expo);
+    }
+
+    .control-item input:checked + .m3-checkbox-box,
+    .control-item input[data-indeterminate="true"] + .m3-checkbox-box {
+      background: var(--md-sys-color-secondary);
+      border-color: var(--md-sys-color-secondary);
+      color: var(--md-sys-color-on-secondary);
+    }
+
+    /* M3 Radio */
+    .m3-radio-circle {
+      width: 22px;
+      height: 22px;
+      border: 2px solid var(--md-sys-color-outline);
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s var(--ease-out-expo);
+    }
+
+    .control-item input:checked + .m3-radio-circle {
+      border-color: var(--md-sys-color-primary);
+    }
+
+    .control-item input:checked + .m3-radio-circle::after {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--md-sys-color-primary);
+    }
+
+    /* Rating Nodes */
+    .rating-group {
+      display: inline-flex;
+      gap: 4px;
+    }
+
+    .rating-btn {
+      width: 44px;
+      height: 44px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface-variant);
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s var(--ease-out-expo);
+    }
+
+    .rating-btn.active {
+      color: var(--md-sys-color-tertiary);
+      border-color: var(--md-sys-color-tertiary);
+      background: var(--md-sys-color-tertiary-container);
+    }
+
+    /* ==========================================================================
+       FAMILY 06: SLIDERS & DUAL-THUMB RANGE
+       ========================================================================== */
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+    }
+
+    input[type="range"].m3-range {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 8px;
+      background: var(--md-sys-color-surface-container-highest);
+      border-radius: 9999px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"].m3-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: var(--shape-chip-radius);
+      background: var(--md-sys-color-secondary);
+      border: 3px solid var(--md-sys-color-surface);
+      box-shadow: 0 0 12px var(--glow-secondary);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    input[type="range"].m3-range::-webkit-slider-thumb:hover {
+      transform: scale(1.18);
+    }
+
+    .tick-marks {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 8px;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    /* Dual Range Slider */
+    .dual-range-wrap {
+      position: relative;
+      height: 36px;
+      display: flex;
+      align-items: center;
+    }
+
+    .dual-range-track {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 8px;
+      background: var(--md-sys-color-surface-container-highest);
+      border-radius: 9999px;
+    }
+
+    .dual-range-fill {
+      position: absolute;
+      height: 8px;
+      background: var(--md-sys-color-primary);
+      border-radius: 9999px;
+    }
+
+    .dual-range-wrap input[type="range"] {
+      position: absolute;
+      width: 100%;
+      pointer-events: none;
+      -webkit-appearance: none;
+      background: transparent;
+    }
+
+    .dual-range-wrap input[type="range"]::-webkit-slider-thumb {
+      pointer-events: auto;
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--md-sys-color-primary);
+      border: 3px solid var(--md-sys-color-surface);
+      cursor: pointer;
+    }
+
+    /* ==========================================================================
+       FAMILY 07: M3 CHIPS (ASSIST, FILTER, INPUT, SUGGESTION)
+       ========================================================================== */
+    .m3-chip {
+      min-height: 44px;
+      padding: 0 16px;
+      border: 1px solid var(--md-sys-color-outline);
+      background: var(--md-sys-color-surface-container-low);
+      color: var(--md-sys-color-on-surface);
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      font-weight: 700;
+      border-radius: var(--shape-chip-radius);
+      transform: skewX(var(--shape-chip-skew));
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s var(--ease-out-expo);
+    }
+
+    .m3-chip > * {
+      transform: skewX(var(--shape-chip-unskew));
+    }
+
+    .m3-chip:hover {
+      background: var(--md-sys-color-surface-container-high);
+      border-color: var(--md-sys-color-secondary);
+    }
+
+    .m3-chip.selected {
+      background: var(--md-sys-color-secondary-container);
+      border-color: var(--md-sys-color-secondary);
+      color: var(--md-sys-color-secondary);
+    }
+
+    .chip-close {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    /* ==========================================================================
+       FAMILY 08: NAVIGATION COMPONENTS (NAV BAR, DRAWER, BREADCRUMBS, PAGINATION)
+       ========================================================================== */
+    .m3-bottom-nav {
+      display: flex;
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: var(--shape-card-radius);
+      padding: 8px;
+    }
+
+    .bottom-nav-btn {
+      flex: 1;
+      min-height: 56px;
+      background: transparent;
+      border: none;
+      color: var(--md-sys-color-on-surface-variant);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+
+    .bottom-nav-pill {
+      padding: 4px 20px;
+      border-radius: 9999px;
+      transition: all 0.25s var(--ease-out-expo);
+    }
+
+    .bottom-nav-btn.active {
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .bottom-nav-btn.active .bottom-nav-pill {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-secondary);
+    }
+
+    .breadcrumbs {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+    }
+
+    .crumb-link {
+      color: var(--md-sys-color-secondary);
+      text-decoration: none;
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .pagination-row {
+      display: inline-flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .page-btn {
+      min-width: 44px;
+      height: 44px;
+      padding: 0 12px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      background: var(--md-sys-color-surface-container-low);
+      color: var(--md-sys-color-on-surface);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 700;
+      border-radius: var(--shape-btn-radius);
+      cursor: pointer;
+      transition: all 0.2s var(--ease-out-expo);
+    }
+
+    .page-btn.active {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      border-color: var(--md-sys-color-primary);
+    }
+
+    /* ==========================================================================
+       FAMILY 09: TABS & HORIZONTAL CAROUSEL
+       ========================================================================== */
+    .m3-tabs-header {
+      position: relative;
+      display: flex;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      overflow-x: auto;
+    }
+
+    .m3-tab-trigger {
+      flex: 1;
+      min-width: 110px;
+      min-height: 48px;
+      background: transparent;
+      border: none;
+      color: var(--md-sys-color-on-surface-variant);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: color 0.2s ease;
+    }
+
+    .m3-tab-trigger.active {
+      color: var(--md-sys-color-secondary);
+    }
+
+    .tab-indicator-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 3px;
+      width: 33.333%;
+      background: var(--md-sys-color-secondary);
+      border-radius: 3px 3px 0 0;
+      transition: transform 0.3s var(--ease-out-expo), width 0.3s var(--ease-out-expo);
+    }
+
+    .m3-tab-body {
+      padding: 16px 4px 4px;
+      font-size: 0.9rem;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    /* Carousel */
+    .carousel-track {
+      display: flex;
+      gap: 16px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      padding-bottom: 8px;
+    }
+
+    .carousel-slide {
+      flex: 0 0 min(280px, 82%);
+      scroll-snap-align: start;
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: var(--shape-card-radius);
+      clip-path: var(--shape-card-clip);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* ==========================================================================
+       FAMILY 10: LOADERS & PROGRESS INDICATORS
+       ========================================================================== */
+    .m3-ring {
+      width: 44px;
+      height: 44px;
+      animation: spin-360 1.8s linear infinite;
+    }
+
+    .m3-ring circle {
+      stroke: var(--md-sys-color-secondary);
+      stroke-width: 3.5;
+      stroke-linecap: round;
+      fill: none;
+      stroke-dasharray: 90, 150;
+      animation: dash-flow 1.4s ease-in-out infinite;
+    }
+
+    @keyframes spin-360 { 100% { transform: rotate(360deg); } }
+    @keyframes dash-flow {
+      0% { stroke-dasharray: 1, 150; stroke-dashoffset: 0; }
+      50% { stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
+      100% { stroke-dasharray: 90, 150; stroke-dashoffset: -124; }
+    }
+
+    .tactical-spinner {
+      width: 42px;
+      height: 42px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .tactical-spinner::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border: 2px solid var(--md-sys-color-primary);
+      animation: spin-360 2.2s var(--ease-out-expo) infinite;
+    }
+
+    .tactical-spinner::after {
+      content: "";
+      width: 14px;
+      height: 14px;
+      background: var(--md-sys-color-secondary);
+      animation: pulse-core 0.9s ease-in-out infinite alternate;
+    }
+
+    @keyframes pulse-core {
+      from { transform: scale(0.7); opacity: 0.45; }
+      to { transform: scale(1.15); opacity: 1; }
+    }
+
+    .waveform-bars {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 40px;
+    }
+
+    .waveform-bars span {
+      width: 4px;
+      height: 12px;
+      background: var(--md-sys-color-tertiary);
+      border-radius: 9999px;
+      animation: wave-eq 0.85s ease-in-out infinite;
+    }
+
+    .waveform-bars span:nth-child(2) { animation-delay: 0.15s; background: var(--md-sys-color-secondary); }
+    .waveform-bars span:nth-child(3) { animation-delay: 0.3s; background: var(--md-sys-color-primary); }
+    .waveform-bars span:nth-child(4) { animation-delay: 0.45s; background: var(--md-sys-color-secondary); }
+    .waveform-bars span:nth-child(5) { animation-delay: 0.6s; }
+
+    @keyframes wave-eq {
+      0%, 100% { height: 10px; }
+      50% { height: 34px; }
+    }
+
+    .linear-track {
+      width: 100%;
+      height: 10px;
+      background: var(--md-sys-color-surface-container-highest);
+      border-radius: var(--shape-track-radius);
+      transform: skewX(var(--shape-track-skew));
+      overflow: hidden;
+      position: relative;
+    }
+
+    .linear-indeterminate-bar {
+      position: absolute;
+      inset: 0;
+      background: var(--md-sys-color-secondary);
+      transform-origin: left;
+      animation: linear-slide 1.6s cubic-bezier(0.65, 0.815, 0.735, 0.395) infinite;
+    }
+
+    @keyframes linear-slide {
+      0% { transform: translateX(-100%) scaleX(0.25); }
+      50% { transform: translateX(25%) scaleX(0.55); }
+      100% { transform: translateX(100%) scaleX(0.25); }
+    }
+
+    .linear-determinate-fill {
+      height: 100%;
+      background: var(--md-sys-color-primary);
+      transition: width 0.35s var(--ease-out-expo);
+    }
+
+    .skeleton-block {
+      height: 14px;
+      border-radius: 6px;
+      background: linear-gradient(
+        90deg,
+        var(--md-sys-color-surface-container-high) 25%,
+        var(--md-sys-color-surface-container-highest) 50%,
+        var(--md-sys-color-surface-container-high) 75%
+      );
+      background-size: 200% 100%;
+      animation: skeleton-shimmer 1.5s infinite linear;
+    }
+
+    @keyframes skeleton-shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ==========================================================================
+       FAMILY 11: M3 CARDS (ELEVATED, FILLED, OUTLINED, MEDIA)
+       ========================================================================== */
+    .m3-card {
+      padding: 20px;
+      border-radius: var(--shape-card-radius);
+      clip-path: var(--shape-card-clip);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: transform 0.25s var(--ease-out-expo), box-shadow 0.25s var(--ease-out-expo);
+    }
+
+    .m3-card:hover {
+      transform: translate3d(0, -3px, 0);
+    }
+
+    .m3-card.elevated {
+      background: var(--md-sys-color-surface-container-low);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+      border: 1px solid var(--md-sys-color-outline-variant);
+    }
+
+    .m3-card.filled {
+      background: var(--md-sys-color-surface-container-highest);
+    }
+
+    .m3-card.outlined {
+      background: var(--md-sys-color-surface);
+      border: 1px solid var(--md-sys-color-outline);
+    }
+
+    .card-media-banner {
+      height: 112px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--md-sys-color-primary-container), var(--md-sys-color-secondary-container));
+      border: 1px solid var(--md-sys-color-outline-variant);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--md-sys-color-secondary);
+      letter-spacing: 0.1em;
+    }
+
+    /* ==========================================================================
+       FAMILY 12: LISTS, DATA TABLE & ACCORDION
+       ========================================================================== */
+    .m3-list {
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: var(--shape-card-radius);
+      overflow: hidden;
+      background: var(--md-sys-color-surface-container-low);
+    }
+
+    .m3-list-item {
+      min-height: 64px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: background 0.2s ease;
+    }
+
+    .m3-list-item:last-child {
+      border-bottom: none;
+    }
+
+    .m3-list-item:hover {
+      background: var(--md-sys-color-surface-container-high);
+    }
+
+    .list-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 0.8rem;
+      flex-shrink: 0;
+    }
+
+    /* Data Table */
+    .table-scroll {
+      overflow-x: auto;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+    }
+
+    .m3-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      text-align: left;
+    }
+
+    .m3-table th, .m3-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    }
+
+    .m3-table th {
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface-variant);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .m3-table tr:hover td {
+      background: var(--md-sys-color-surface-container-low);
+    }
+
+    .status-pill {
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 0.68rem;
+      font-weight: 700;
+    }
+
+    .status-online { background: var(--md-sys-color-success-container); color: var(--md-sys-color-success); }
+    .status-warn { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-tertiary); }
+    .status-crit { background: var(--md-sys-color-error-container); color: var(--md-sys-color-error); }
+
+    /* Accordion */
+    .accordion-box {
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--md-sys-color-surface-container-low);
+    }
+
+    .accordion-head {
+      width: 100%;
+      min-height: 52px;
+      padding: 0 16px;
+      background: transparent;
+      border: none;
+      color: var(--md-sys-color-on-surface);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .accordion-body {
+      max-height: 0;
+      overflow: hidden;
+      padding: 0 16px;
+      font-size: 0.86rem;
+      color: var(--md-sys-color-on-surface-variant);
+      transition: max-height 0.3s var(--ease-out-expo), padding 0.3s var(--ease-out-expo);
+    }
+
+    .accordion-box.open .accordion-body {
+      max-height: 160px;
+      padding: 0 16px 16px;
+    }
+
+    /* ==========================================================================
+       FAMILY 13 & 14: OVERLAYS, MENUS, TOOLTIPS, BADGES & SNACKBAR
+       ========================================================================== */
+    .menu-anchor {
+      position: relative;
+      display: inline-block;
+    }
+
+    .m3-dropdown-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      min-width: 210px;
+      background: var(--md-sys-color-surface-container-highest);
+      border: 1px solid var(--md-sys-color-outline);
+      border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      padding: 6px;
+      display: none;
+      flex-direction: column;
+      z-index: 60;
+    }
+
+    .m3-dropdown-menu.open {
+      display: flex;
+    }
+
+    .menu-action {
+      min-height: 44px;
+      padding: 0 12px;
+      border: none;
+      background: transparent;
+      color: var(--md-sys-color-on-surface);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .menu-action:hover {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-secondary);
+    }
+
+    /* Tooltips */
+    .tooltip-host {
+      position: relative;
+      display: inline-flex;
+    }
+
+    .m3-tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      background: var(--md-sys-color-on-surface);
+      color: var(--md-sys-color-surface);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      padding: 6px 12px;
+      border-radius: 6px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.2s var(--ease-out-expo);
+      z-index: 50;
+    }
+
+    .tooltip-host:hover .m3-tooltip,
+    .tooltip-host:focus-within .m3-tooltip {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Numeric Badges */
+    .badge-wrap {
+      position: relative;
+      display: inline-flex;
+    }
+
+    .badge-dot {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--md-sys-color-primary);
+    }
+
+    .badge-count {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9999px;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ==========================================================================
+       FAMILY 15: DATE PICKER, TIME PICKER & STEPPER WIZARD
+       ========================================================================== */
+    .calendar-card {
+      background: var(--md-sys-color-surface-container-low);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 16px;
+      padding: 16px;
+      max-width: 340px;
+    }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-top: 12px;
+      text-align: center;
+    }
+
+    .cal-day-head {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--md-sys-color-on-surface-variant);
+      padding: 6px 0;
+    }
+
+    .cal-day-btn {
+      min-height: 40px;
+      border-radius: 50%;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--md-sys-color-on-surface);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+
+    .cal-day-btn:hover {
+      background: var(--md-sys-color-surface-container-high);
+    }
+
+    .cal-day-btn.selected {
+      background: var(--md-sys-color-secondary);
+      color: var(--md-sys-color-on-secondary);
+      font-weight: 700;
+    }
+
+    .time-inputs {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .time-box {
+      width: 72px;
+      height: 64px;
+      background: var(--md-sys-color-surface-container-highest);
+      border: 2px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+      color: var(--md-sys-color-on-surface);
+      font-family: var(--font-mono);
+      font-size: 1.5rem;
+      font-weight: 700;
+      text-align: center;
+      outline: none;
+    }
+
+    .time-box:focus {
+      border-color: var(--md-sys-color-secondary);
+      background: var(--md-sys-color-secondary-container);
+    }
+
+    /* Stepper */
+    .stepper-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .step-node {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    .step-circle {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid var(--md-sys-color-outline);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .step-node.active {
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .step-node.active .step-circle {
+      border-color: var(--md-sys-color-primary);
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+    }
+
+    .step-node.completed .step-circle {
+      border-color: var(--md-sys-color-secondary);
+      background: var(--md-sys-color-secondary);
+      color: var(--md-sys-color-on-secondary);
+    }
+
+    .step-divider {
+      flex: 1;
+      height: 2px;
+      background: var(--md-sys-color-outline-variant);
+    }
+
+    /* ==========================================================================
+       MODALS, BOTTOM SHEET, SIDE SHEET & SNACKBAR
+       ========================================================================== */
+    .overlay-scrim {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 10, 0.78);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 1200;
+    }
+
+    .overlay-scrim.open {
+      display: flex;
+    }
+
+    .dialog-surface {
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline);
+      border-radius: var(--shape-panel-radius);
+      clip-path: var(--shape-panel-clip);
+      max-width: 480px;
+      width: 100%;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
+    }
+
+    /* Slide-Up Bottom Sheet */
+    .bottom-sheet-scrim {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 10, 0.72);
+      z-index: 1250;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .bottom-sheet-scrim.open {
+      display: flex;
+    }
+
+    .bottom-sheet-panel {
+      width: 100%;
+      max-width: 640px;
+      background: var(--md-sys-color-surface-container-high);
+      border-top: 1px solid var(--md-sys-color-outline);
+      border-radius: 24px 24px 0 0;
+      padding: 16px 24px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      animation: sheet-up 0.3s var(--ease-out-expo);
+    }
+
+    @keyframes sheet-up {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .sheet-drag-handle {
+      width: 40px;
+      height: 4px;
+      border-radius: 9999px;
+      background: var(--md-sys-color-outline);
+      margin: 0 auto 8px;
+    }
+
+    /* Slide-Over Side Sheet & Code Inspector Drawer */
+    .side-sheet-scrim {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 10, 0.72);
+      z-index: 1300;
+      display: none;
+      justify-content: flex-end;
+    }
+
+    .side-sheet-scrim.open {
+      display: flex;
+    }
+
+    .side-sheet-panel {
+      width: 100%;
+      max-width: 520px;
+      height: 100%;
+      background: var(--md-sys-color-surface-container);
+      border-left: 1px solid var(--md-sys-color-outline);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      animation: sheet-left 0.3s var(--ease-out-expo);
+    }
+
+    @keyframes sheet-left {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+
+    .code-pre {
+      background: var(--md-sys-color-surface-container-lowest);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      color: var(--md-sys-color-secondary);
+      overflow-x: auto;
+      white-space: pre-wrap;
+      line-height: 1.55;
+      flex: 1;
+    }
+
+    /* Snackbar */
+    .m3-snackbar {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      max-width: 420px;
+      min-height: 52px;
+      background: var(--md-sys-color-surface-container-highest);
+      border: 1px solid var(--md-sys-color-secondary);
+      color: var(--md-sys-color-on-surface);
+      padding: 8px 16px;
+      border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      transform: translate3d(0, 140px, 0);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 2000;
+      transition: all 0.35s var(--ease-out-expo);
+    }
+
+    .m3-snackbar.visible {
+      transform: translate3d(0, 0, 0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- STICKY NAVIGATION RAIL (DESKTOP) -->
+    <aside class="nav-rail-desktop" aria-label="Component Families">
+      <div class="rail-brand" title="GR-74 M3 System">GR74</div>
+      <a href="#sec-tokens" class="rail-link active">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+        </div>
+        <span>TOKENS</span>
+      </a>
+      <a href="#sec-buttons" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="8" rx="4"/></svg>
+        </div>
+        <span>BUTTONS</span>
+      </a>
+      <a href="#sec-fabs" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <span>FAB/SEG</span>
+      </a>
+      <a href="#sec-inputs" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+        </div>
+        <span>INPUTS</span>
+      </a>
+      <a href="#sec-controls" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+        <span>SELECT</span>
+      </a>
+      <a href="#sec-sliders" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        </div>
+        <span>SLIDERS</span>
+      </a>
+      <a href="#sec-chips" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        </div>
+        <span>CHIPS</span>
+      </a>
+      <a href="#sec-nav" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+        </div>
+        <span>NAV</span>
+      </a>
+      <a href="#sec-tabs" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="9"/></svg>
+        </div>
+        <span>TABS</span>
+      </a>
+      <a href="#sec-loaders" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+        </div>
+        <span>LOADERS</span>
+      </a>
+      <a href="#sec-cards" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        </div>
+        <span>CARDS</span>
+      </a>
+      <a href="#sec-data" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        </div>
+        <span>DATA</span>
+      </a>
+      <a href="#sec-overlays" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
+        </div>
+        <span>SHEETS</span>
+      </a>
+      <a href="#sec-pickers" class="rail-link">
+        <div class="rail-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <span>PICKERS</span>
+      </a>
+    </aside>
+
+    <!-- MAIN CONTENT VIEWPORT -->
+    <div class="main-viewport">
+      <!-- TOP APP BAR -->
+      <header class="top-app-bar">
+        <div class="brand-block">
+          <div class="brand-eyebrow">// MATERIAL 3 + DHARMA TACTICAL HYBRID</div>
+          <h1 class="brand-title">GR-74 <span>DESIGN SYSTEM</span></h1>
+        </div>
+
+        <!-- LIVE COMPONENT FILTER -->
+        <div class="global-search-box">
+          <svg class="global-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="global-filter" type="text" class="global-search-input" placeholder="Filter 24+ M3 families..." oninput="filterComponents(this.value)" />
+          <button id="global-filter-clear" class="global-search-clear" onclick="clearGlobalFilter()" aria-label="Clear search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <!-- 3-MODE THEME SWITCHER -->
+        <div class="theme-switcher" role="group" aria-label="Design System Theme Mode">
+          <button id="theme-tactical" class="theme-btn active" onclick="setThemeMode('tactical')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            TACTICAL
+          </button>
+          <button id="theme-slick" class="theme-btn" onclick="setThemeMode('slick')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="3" width="18" height="18" rx="5"/></svg>
+            MINIMAL SLICK
+          </button>
+          <button id="theme-daylight" class="theme-btn" onclick="setThemeMode('daylight')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+            DAYLIGHT LAB
+          </button>
+        </div>
+      </header>
+
+      <!-- QUICK JUMP PILL STRIP -->
+      <div class="jump-strip">
+        <a href="#sec-tokens" class="jump-pill">01. Tokens & Type</a>
+        <a href="#sec-buttons" class="jump-pill">02. Buttons & Split</a>
+        <a href="#sec-fabs" class="jump-pill">03. Segmented & FABs</a>
+        <a href="#sec-inputs" class="jump-pill">04. Text Fields & Search</a>
+        <a href="#sec-controls" class="jump-pill">05. Selection Controls</a>
+        <a href="#sec-sliders" class="jump-pill">06. Sliders & Range</a>
+        <a href="#sec-chips" class="jump-pill">07. Chips</a>
+        <a href="#sec-nav" class="jump-pill">08. Navigation</a>
+        <a href="#sec-tabs" class="jump-pill">09. Tabs & Carousel</a>
+        <a href="#sec-loaders" class="jump-pill">10. Loaders & Progress</a>
+        <a href="#sec-cards" class="jump-pill">11. M3 Cards</a>
+        <a href="#sec-data" class="jump-pill">12. Lists, Table & Accordion</a>
+        <a href="#sec-overlays" class="jump-pill">13–14. Sheets, Menus & Badges</a>
+        <a href="#sec-pickers" class="jump-pill">15. Pickers & Wizards</a>
+      </div>
+
+      <!-- COMPONENT SHOWCASE SECTIONS -->
+      <main class="content-wrapper">
+
+        <!-- ====================================================================
+             01. TYPOGRAPHY SCALE & COLOR TOKEN SYSTEM
+             ==================================================================== -->
+        <section id="sec-tokens" class="component-section" data-keywords="typography tokens color surface elevation display headline body label">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">01 // FOUNDATION TOKENS</span>
+              <h2 class="section-heading">Typography Scale & Tonal Elevation Tokens</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('tokens')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY CSS TOKENS
+            </button>
+          </div>
+
+          <div class="sub-grid-2">
+            <!-- M3 Typography Hierarchy -->
+            <div class="type-scale-list">
+              <div class="demo-label">M3 TYPE RAMP (DISPLAY → LABEL)</div>
+              <div class="type-row">
+                <span style="font-family: var(--font-display); font-size: 2rem; font-weight: 700; line-height: 1.1;">Display Medium</span>
+                <span class="type-meta">32px / 700 / Display</span>
+              </div>
+              <div class="type-row">
+                <span style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 700;">Headline Small</span>
+                <span class="type-meta">24px / 700 / Headline</span>
+              </div>
+              <div class="type-row">
+                <span style="font-size: 1.125rem; font-weight: 600;">Title Medium — Neural Uplink Active</span>
+                <span class="type-meta">18px / 600 / Title</span>
+              </div>
+              <div class="type-row">
+                <span style="font-size: 0.95rem; color: var(--md-sys-color-on-surface-variant);">Body Medium — Standardized 8px grid rhythm for high-density telemetry interfaces.</span>
+                <span class="type-meta">15px / 400 / Body</span>
+              </div>
+              <div class="type-row">
+                <span style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--md-sys-color-secondary);">LABEL LARGE // MONOSPACE TELEMETRY</span>
+                <span class="type-meta">12px / 700 / Mono</span>
+              </div>
+            </div>
+
+            <!-- Interactive Click-to-Copy Token Swatches -->
+            <div class="flex-col">
+              <div class="demo-label">COLOR & SURFACE ELEVATION TOKENS (CLICK TO COPY VARIABLE)</div>
+              <div class="token-swatches">
+                <div class="token-card" onclick="copyToken('--md-sys-color-primary')">
+                  <div class="token-swatch-color" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);">PRIMARY</div>
+                  <div class="token-info">
+                    <span class="token-name">Primary</span>
+                    <span class="token-var">--md-sys-color-primary</span>
+                  </div>
+                </div>
+                <div class="token-card" onclick="copyToken('--md-sys-color-secondary')">
+                  <div class="token-swatch-color" style="background: var(--md-sys-color-secondary); color: var(--md-sys-color-on-secondary);">SECONDARY</div>
+                  <div class="token-info">
+                    <span class="token-name">Secondary</span>
+                    <span class="token-var">--md-sys-color-secondary</span>
+                  </div>
+                </div>
+                <div class="token-card" onclick="copyToken('--md-sys-color-tertiary')">
+                  <div class="token-swatch-color" style="background: var(--md-sys-color-tertiary); color: var(--md-sys-color-on-tertiary);">TERTIARY</div>
+                  <div class="token-info">
+                    <span class="token-name">Tertiary</span>
+                    <span class="token-var">--md-sys-color-tertiary</span>
+                  </div>
+                </div>
+                <div class="token-card" onclick="copyToken('--md-sys-color-surface-container-low')">
+                  <div class="token-swatch-color" style="background: var(--md-sys-color-surface-container-low); border-bottom: 1px solid var(--md-sys-color-outline-variant);">LEVEL 1</div>
+                  <div class="token-info">
+                    <span class="token-name">Surface Low</span>
+                    <span class="token-var">--surface-container-low</span>
+                  </div>
+                </div>
+                <div class="token-card" onclick="copyToken('--md-sys-color-surface-container')">
+                  <div class="token-swatch-color" style="background: var(--md-sys-color-surface-container); border-bottom: 1px solid var(--md-sys-color-outline-variant);">LEVEL 2</div>
+                  <div class="token-info">
+                    <span class="token-name">Surface Container</span>
+                    <span class="token-var">--surface-container</span>
+                  </div>
+                </div>
+                <div class="token-card" onclick="copyToken('--md-sys-color-surface-container-highest')">
+                  <div class="token-swatch-color" style="background: var(--md-sys-color-surface-container-highest); border-bottom: 1px solid var(--md-sys-color-outline-variant);">LEVEL 5</div>
+                  <div class="token-info">
+                    <span class="token-name">Surface Highest</span>
+                    <span class="token-var">--surface-container-highest</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             02. M3 BUTTONS, ICON BUTTONS, LOADING & SPLIT BUTTONS
+             ==================================================================== -->
+        <section id="sec-buttons" class="component-section" data-keywords="buttons filled tonal outlined elevated text icon button loading split">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">02 // ACTION TRIGGERS</span>
+              <h2 class="section-heading">M3 Buttons, Icon Buttons, Async & Split Buttons</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('buttons')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-2">
+            <!-- Standard M3 Button Hierarchy -->
+            <div class="demo-box">
+              <div class="demo-label">M3 EMPHASIS HIERARCHY</div>
+              <div class="flex-row">
+                <button class="m3-btn m3-btn-skew m3-btn-filled" onclick="pushSnackbar('FILLED ACTION EXECUTED')">
+                  <span>FILLED PRIMARY</span>
+                </button>
+                <button class="m3-btn m3-btn-skew m3-btn-tonal" onclick="pushSnackbar('FILLED TONAL TRIGGERED')">
+                  <span>FILLED TONAL</span>
+                </button>
+                <button class="m3-btn m3-btn-outlined" onclick="pushSnackbar('OUTLINED ACTION')">
+                  OUTLINED
+                </button>
+                <button class="m3-btn m3-btn-elevated" onclick="pushSnackbar('ELEVATED CHAMFER ACTION')">
+                  ELEVATED
+                </button>
+                <button class="m3-btn m3-btn-text" onclick="pushSnackbar('TEXT ACTION')">
+                  TEXT BUTTON
+                </button>
+                <button class="m3-btn m3-btn-filled" disabled>
+                  DISABLED
+                </button>
+              </div>
+            </div>
+
+            <!-- Icon Buttons, Async Loading Button & Split Button -->
+            <div class="demo-box">
+              <div class="demo-label">ICON BUTTONS, ASYNC LOADING & SPLIT BUTTON</div>
+              <div class="flex-row">
+                <button class="icon-btn" title="Standard Icon Button" onclick="this.classList.toggle('toggle-active')">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                </button>
+                <button class="icon-btn filled" title="Filled Icon Button" onclick="pushSnackbar('TARGET LOCKED')">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </button>
+                <button class="icon-btn tonal" title="Filled Tonal Icon Button" onclick="pushSnackbar('SHIELD CHARGED')">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </button>
+                <button class="icon-btn outlined" title="Outlined Icon Button" onclick="pushSnackbar('AUDIO MUTED')">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                </button>
+
+                <!-- Async Loading Button -->
+                <button id="async-deploy-btn" class="m3-btn m3-btn-tonal" onclick="simulateAsyncBtn(this)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <span>SYNC KERNEL</span>
+                </button>
+
+                <!-- Split Button -->
+                <div class="menu-anchor">
+                  <div class="split-btn-group">
+                    <button class="m3-btn m3-btn-filled split-btn-main" onclick="pushSnackbar('DEPLOYING PRIMARY PAYLOAD')">
+                      DEPLOY
+                    </button>
+                    <button class="m3-btn m3-btn-filled split-btn-arrow" aria-label="More deploy options" onclick="toggleDropdown('split-menu')">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                  </div>
+                  <div id="split-menu" class="m3-dropdown-menu">
+                    <button class="menu-action" onclick="pushSnackbar('STEALTH INSERTION SELECTED'); closeAllDropdowns()">Stealth Insertion</button>
+                    <button class="menu-action" onclick="pushSnackbar('OVERDRIVE ASSAULT SELECTED'); closeAllDropdowns()">Overdrive Assault</button>
+                    <button class="menu-action" onclick="pushSnackbar('DIAGNOSTIC PROBE SELECTED'); closeAllDropdowns()">Diagnostic Probe</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             03. SEGMENTED BUTTONS & FLOATING ACTION BUTTONS (FABS)
+             ==================================================================== -->
+        <section id="sec-fabs" class="component-section" data-keywords="segmented buttons single select multi select fab floating action button extended">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">03 // SEGMENTED CONTROLS & FABS</span>
+              <h2 class="section-heading">Single/Multi Segmented Buttons & Morphing FABs</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('fabs')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-2">
+            <div class="demo-box">
+              <div class="demo-label">SINGLE-SELECT & MULTI-SELECT SEGMENTED GROUPS</div>
+              <div class="flex-col">
+                <div>
+                  <div class="type-meta" style="margin-bottom: 6px;">Single-Select Stance:</div>
+                  <div class="segmented-btn-row" data-mode="single">
+                    <button class="seg-option selected" onclick="handleSegmentClick(this)">
+                      <span class="check-mark">✓</span> BLINK
+                    </button>
+                    <button class="seg-option" onclick="handleSegmentClick(this)">
+                      <span class="check-mark">✓</span> SURGE
+                    </button>
+                    <button class="seg-option" onclick="handleSegmentClick(this)">
+                      <span class="check-mark">✓</span> TEMPEST
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <div class="type-meta" style="margin-bottom: 6px;">Multi-Select Cyberware Filters:</div>
+                  <div class="segmented-btn-row" data-mode="multi">
+                    <button class="seg-option selected" onclick="handleSegmentClick(this)">
+                      <span class="check-mark">✓</span> REFLEX
+                    </button>
+                    <button class="seg-option selected" onclick="handleSegmentClick(this)">
+                      <span class="check-mark">✓</span> DEFLECT
+                    </button>
+                    <button class="seg-option" onclick="handleSegmentClick(this)">
+                      <span class="check-mark">✓</span> SENSORY
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="demo-box">
+              <div class="demo-label">SMALL, STANDARD, LARGE & MORPHING EXTENDED FAB</div>
+              <div class="flex-row">
+                <button class="m3-fab fab-small" title="Small FAB" onclick="pushSnackbar('SMALL FAB TRIGGERED')">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <button class="m3-fab fab-standard" title="Standard FAB" onclick="pushSnackbar('STANDARD FAB TRIGGERED')">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </button>
+                <button class="m3-fab fab-large" title="Large FAB" onclick="pushSnackbar('LARGE FAB TRIGGERED')">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                </button>
+                <button id="morph-fab" class="m3-fab fab-extended" onclick="this.classList.toggle('collapsed')">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                  <span class="fab-label">MORPH FAB</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             04. M3 TEXT FIELDS, VALIDATION, AUTOCOMPLETE & SELECT
+             ==================================================================== -->
+        <section id="sec-inputs" class="component-section" data-keywords="text fields filled outlined validation character counter search autocomplete select dropdown">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">04 // DATA ENTRY</span>
+              <h2 class="section-heading">Filled & Outlined Text Fields, Validation & Autocomplete</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('inputs')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-2">
+            <!-- Filled & Outlined with Counter + Validation -->
+            <div class="flex-col">
+              <div class="m3-field">
+                <div class="m3-field-box has-leading">
+                  <svg style="margin-right: 10px; color: var(--md-sys-color-secondary);" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <input id="filled-cipher" type="text" class="m3-field-input" placeholder=" " maxlength="24" oninput="document.getElementById('cipher-count').textContent = this.value.length + '/24'" />
+                  <label class="m3-floating-label" for="filled-cipher">FILLED // NEURAL CIPHER KEY</label>
+                </div>
+                <div class="field-supporting">
+                  <span>256-bit quantum-resistant key</span>
+                  <span id="cipher-count">0/24</span>
+                </div>
+              </div>
+
+              <div class="m3-field">
+                <div id="outlined-callsign-box" class="m3-field-box outlined">
+                  <input id="outlined-callsign" type="text" class="m3-field-input" placeholder=" " value="GR-74" oninput="validateCallsign(this.value)" />
+                  <label class="m3-floating-label" for="outlined-callsign">OUTLINED // OPERATIVE CALLSIGN</label>
+                  <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--md-sys-color-on-surface-variant);">.SYS</span>
+                </div>
+                <div id="callsign-helper" class="field-supporting">
+                  <span>Minimum 4 characters required</span>
+                  <span>VERIFIED</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Autocomplete Search & Custom Select -->
+            <div class="flex-col">
+              <div class="autocomplete-wrap">
+                <div class="m3-field">
+                  <div class="m3-field-box outlined has-leading">
+                    <svg style="margin-right: 10px; color: var(--md-sys-color-on-surface-variant);" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input id="sector-search" type="text" class="m3-field-input" placeholder=" " onfocus="filterSectors(this.value)" oninput="filterSectors(this.value)" />
+                    <label class="m3-floating-label" for="sector-search">SEARCH DHARMA SECTORS (CLICK OR TYPE)</label>
+                  </div>
+                </div>
+                <div id="sector-menu" class="autocomplete-menu"></div>
+              </div>
+
+              <div class="m3-field">
+                <div class="m3-field-box outlined">
+                  <select aria-label="Target Protocol" class="m3-field-input" style="cursor: pointer; padding-top: 0;">
+                    <option value="cybervoid">PROTOCOL // CYBERVOID DIVE</option>
+                    <option value="dharma">PROTOCOL // DHARMA SPIRE ASCENT</option>
+                    <option value="hel">PROTOCOL // HEL CORE OVERRIDE</option>
+                  </select>
+                </div>
+                <div class="field-supporting">
+                  <span>Native accessible M3 select menu</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             05. SELECTION CONTROLS (SWITCHES, INDETERMINATE CHECKBOXES, RADIOS, RATING)
+             ==================================================================== -->
+        <section id="sec-controls" class="component-section" data-keywords="selection controls switch checkbox indeterminate radio rating">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">05 // SELECTION CONTROLS</span>
+              <h2 class="section-heading">Switches, Tri-State Checkboxes, Radios & Rating Nodes</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('controls')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-3">
+            <!-- M3 Switches -->
+            <div class="demo-box">
+              <div class="demo-label">M3 ICON SWITCHES</div>
+              <label class="control-item" style="justify-content: space-between; width: 100%;">
+                <span>SENSORY BOOST</span>
+                <input type="checkbox" checked />
+                <div class="m3-switch-track">
+                  <div class="m3-switch-thumb">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                </div>
+              </label>
+              <label class="control-item" style="justify-content: space-between; width: 100%;">
+                <span>THERMAL OPTICS</span>
+                <input type="checkbox" />
+                <div class="m3-switch-track">
+                  <div class="m3-switch-thumb"></div>
+                </div>
+              </label>
+            </div>
+
+            <!-- Tri-State Parent/Child Checkboxes -->
+            <div class="demo-box">
+              <div class="demo-label">INDETERMINATE CHECKBOX TREE</div>
+              <label class="control-item">
+                <input id="parent-check" type="checkbox" data-indeterminate="true" onchange="toggleParentCheck(this)" />
+                <span id="parent-check-box" class="m3-checkbox-box">—</span>
+                <span>ALL SUBSYSTEMS</span>
+              </label>
+              <div style="padding-left: 24px; display: flex; flex-direction: column; gap: 4px;">
+                <label class="control-item">
+                  <input type="checkbox" class="child-check" checked onchange="syncParentCheck()" />
+                  <span class="m3-checkbox-box">✓</span>
+                  <span>Grapnel Hook</span>
+                </label>
+                <label class="control-item">
+                  <input type="checkbox" class="child-check" onchange="syncParentCheck()" />
+                  <span class="m3-checkbox-box">✓</span>
+                  <span>Wallrun Thrusters</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Radios & Interactive Rating -->
+            <div class="demo-box">
+              <div class="demo-label">RADIO GROUP & THREAT RATING</div>
+              <div class="flex-row">
+                <label class="control-item">
+                  <input type="radio" name="combat-mode" checked />
+                  <span class="m3-radio-circle"></span>
+                  <span>LETHAL</span>
+                </label>
+                <label class="control-item">
+                  <input type="radio" name="combat-mode" />
+                  <span class="m3-radio-circle"></span>
+                  <span>EVASIVE</span>
+                </label>
+              </div>
+              <div>
+                <div class="type-meta" style="margin-bottom: 6px;">Threat Priority Level: <strong id="rating-readout">4 / 5</strong></div>
+                <div id="rating-bar" class="rating-group">
+                  <button class="rating-btn active" onclick="setRating(1)">★</button>
+                  <button class="rating-btn active" onclick="setRating(2)">★</button>
+                  <button class="rating-btn active" onclick="setRating(3)">★</button>
+                  <button class="rating-btn active" onclick="setRating(4)">★</button>
+                  <button class="rating-btn" onclick="setRating(5)">★</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             06. SLIDERS & DUAL-THUMB RANGE CONTROLS
+             ==================================================================== -->
+        <section id="sec-sliders" class="component-section" data-keywords="sliders continuous discrete stepped dual thumb range">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">06 // RANGE CONTROLS</span>
+              <h2 class="section-heading">Continuous, Discrete Stepped & Dual-Thumb Range Sliders</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('sliders')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-3">
+            <div class="demo-box">
+              <div class="slider-header">
+                <span class="demo-label">CONTINUOUS DILATION</span>
+                <span id="val-cont" style="color: var(--md-sys-color-secondary); font-weight: 700;">68%</span>
+              </div>
+              <input type="range" class="m3-range" min="0" max="100" value="68" oninput="document.getElementById('val-cont').textContent = this.value + '%'" />
+            </div>
+
+            <div class="demo-box">
+              <div class="slider-header">
+                <span class="demo-label">DISCRETE STEPPED (25% TICKS)</span>
+                <span id="val-disc" style="color: var(--md-sys-color-tertiary); font-weight: 700;">50%</span>
+              </div>
+              <input type="range" class="m3-range" min="0" max="100" step="25" value="50" oninput="document.getElementById('val-disc').textContent = this.value + '%'" />
+              <div class="tick-marks">
+                <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+              </div>
+            </div>
+
+            <div class="demo-box">
+              <div class="slider-header">
+                <span class="demo-label">DUAL-THUMB FREQUENCY BAND</span>
+                <span id="val-dual" style="color: var(--md-sys-color-primary); font-weight: 700;">25 — 80 GHz</span>
+              </div>
+              <div class="dual-range-wrap">
+                <div class="dual-range-track"></div>
+                <div id="dual-fill" class="dual-range-fill" style="left: 25%; width: 55%;"></div>
+                <input id="dual-min" type="range" min="0" max="100" value="25" oninput="updateDualRange()" />
+                <input id="dual-max" type="range" min="0" max="100" value="80" oninput="updateDualRange()" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             07. M3 CHIPS (ASSIST, FILTER, INPUT, SUGGESTION)
+             ==================================================================== -->
+        <section id="sec-chips" class="component-section" data-keywords="chips assist filter input dismissible suggestion">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">07 // COMPACT ATTRIBUTES</span>
+              <h2 class="section-heading">Assist, Filter, Dismissible Input & Suggestion Chips</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('chips')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-2">
+            <div class="demo-box">
+              <div class="demo-label">ASSIST & FILTER CHIPS (CLICK TO TOGGLE)</div>
+              <div class="flex-row">
+                <button class="m3-chip" onclick="pushSnackbar('CALIBRATING KATANA EDGE')">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  <span>ASSIST: RECALIBRATE</span>
+                </button>
+                <button class="m3-chip selected" onclick="toggleFilterChip(this)">
+                  <span>✓ FILTER: CYBERVOID</span>
+                </button>
+                <button class="m3-chip" onclick="toggleFilterChip(this)">
+                  <span>+ FILTER: SECTOR 04</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="demo-box">
+              <div class="demo-label">DISMISSIBLE INPUT CHIPS & SUGGESTIONS</div>
+              <div id="input-chip-list" class="flex-row">
+                <div class="m3-chip selected" onclick="this.remove(); pushSnackbar('REMOVED TAG: ARCHITECT')">
+                  <span>NODE: ARCHITECT</span>
+                  <span class="chip-close">✕</span>
+                </div>
+                <div class="m3-chip selected" onclick="this.remove(); pushSnackbar('REMOVED TAG: JACK')">
+                  <span>NODE: JACK_74</span>
+                  <span class="chip-close">✕</span>
+                </div>
+                <button class="m3-chip" onclick="addSuggestionChip('ZOE_UPLINK')">
+                  <span>+ SUGGESTION: ZOE_UPLINK</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             08. NAVIGATION COMPONENTS (NAV BAR, BREADCRUMBS, PAGINATION)
+             ==================================================================== -->
+        <section id="sec-nav" class="component-section" data-keywords="navigation bar rail breadcrumbs pagination">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">08 // WAYFINDING</span>
+              <h2 class="section-heading">M3 Navigation Bar, Breadcrumbs & Pagination</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('nav')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-2">
+            <div class="demo-box">
+              <div class="demo-label">M3 BOTTOM NAVIGATION BAR WITH INDICATOR PILL</div>
+              <nav class="m3-bottom-nav" aria-label="Demo Navigation Bar">
+                <button class="bottom-nav-btn active" onclick="activateBottomNav(this)">
+                  <div class="bottom-nav-pill">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                  </div>
+                  <span>COMBAT HUD</span>
+                </button>
+                <button class="bottom-nav-btn" onclick="activateBottomNav(this)">
+                  <div class="bottom-nav-pill">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                  </div>
+                  <span>UPGRADES</span>
+                </button>
+                <button class="bottom-nav-btn" onclick="activateBottomNav(this)">
+                  <div class="bottom-nav-pill">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  </div>
+                  <span>INTEL LOGS</span>
+                </button>
+              </nav>
+            </div>
+
+            <div class="demo-box">
+              <div class="demo-label">BREADCRUMBS & PAGINATION CONTROLS</div>
+              <div class="breadcrumbs">
+                <a href="#sec-nav" class="crumb-link" onclick="event.preventDefault(); pushSnackbar('ROOT: DHARMA_CITY')">DHARMA_CITY</a>
+                <span>/</span>
+                <a href="#sec-nav" class="crumb-link" onclick="event.preventDefault(); pushSnackbar('BRANCH: BASE_SECTOR')">BASE_SECTOR</a>
+                <span>/</span>
+                <span style="color: var(--md-sys-color-on-surface-variant);">LEVEL_04_CORE</span>
+              </div>
+              <div class="pagination-row">
+                <button class="page-btn" onclick="stepPage(-1)">PREV</button>
+                <button class="page-btn active" onclick="setPage(this)">01</button>
+                <button class="page-btn" onclick="setPage(this)">02</button>
+                <button class="page-btn" onclick="setPage(this)">03</button>
+                <button class="page-btn" onclick="setPage(this)">04</button>
+                <button class="page-btn" onclick="stepPage(1)">NEXT</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             09. PRIMARY TABS & INTERACTIVE CAROUSEL
+             ==================================================================== -->
+        <section id="sec-tabs" class="component-section" data-keywords="tabs primary sliding indicator carousel horizontal cards">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">09 // CONTENT ORGANIZATION</span>
+              <h2 class="section-heading">Primary Animated Tabs & Horizontal Snap Carousel</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('tabs')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-2">
+            <!-- Animated Sliding Indicator Tabs -->
+            <div class="demo-box">
+              <div class="demo-label">M3 PRIMARY TABS WITH SLIDING INDICATOR</div>
+              <div class="m3-tabs-header">
+                <button class="m3-tab-trigger active" onclick="switchM3Tab(0, this)">KATANA</button>
+                <button class="m3-tab-trigger" onclick="switchM3Tab(1, this)">BLINK</button>
+                <button class="m3-tab-trigger" onclick="switchM3Tab(2, this)">OVERLORD</button>
+                <div id="m3-tab-bar" class="tab-indicator-bar"></div>
+              </div>
+              <div id="m3-tab-content" class="m3-tab-body">
+                <strong>Monomolecular Katana:</strong> Precision-forged alloy capable of severing reinforced cybernetic plating and deflecting high-caliber rounds.
+              </div>
+            </div>
+
+            <!-- Horizontal Snap Carousel -->
+            <div class="demo-box">
+              <div class="flex-row" style="justify-content: space-between;">
+                <span class="demo-label">M3 HERO CAROUSEL</span>
+                <div class="flex-row">
+                  <button class="icon-btn outlined" onclick="scrollCarousel(-296)" aria-label="Previous slide">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                  </button>
+                  <button class="icon-btn outlined" onclick="scrollCarousel(296)" aria-label="Next slide">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div id="m3-carousel" class="carousel-track">
+                <div class="carousel-slide">
+                  <span class="section-index">MODULE 01</span>
+                  <strong>SENSORY BOOST</strong>
+                  <p class="type-meta">Dilates subjective time perception during mid-air vector shifts.</p>
+                </div>
+                <div class="carousel-slide">
+                  <span class="section-index">MODULE 02</span>
+                  <strong>TEMPEST BLAST</strong>
+                  <p class="type-meta">Emits a directional shockwave to repel incoming projectiles.</p>
+                </div>
+                <div class="carousel-slide">
+                  <span class="section-index">MODULE 03</span>
+                  <strong>SURGE ARC</strong>
+                  <p class="type-meta">Releases a focused plasma crescent across long-range corridors.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             10. LOADERS & PROGRESS INDICATORS
+             ==================================================================== -->
+        <section id="sec-loaders" class="component-section" data-keywords="loaders spinner circular linear determinate indeterminate skeleton shimmer">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">10 // ASYNC FEEDBACK</span>
+              <h2 class="section-heading">Circular Spinners, Waveform, Progress Bars & Skeleton Shimmer</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('loaders')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-3">
+            <!-- 3 Spinners -->
+            <div class="demo-box">
+              <div class="demo-label">INDETERMINATE SPINNERS</div>
+              <div class="flex-row" style="justify-content: space-around; padding: 12px 0;">
+                <div class="flex-col" style="align-items: center; gap: 8px;">
+                  <svg class="m3-ring" viewBox="0 0 50 50"><circle cx="25" cy="25" r="20"></circle></svg>
+                  <span class="type-meta">M3 Ring</span>
+                </div>
+                <div class="flex-col" style="align-items: center; gap: 8px;">
+                  <div class="tactical-spinner"></div>
+                  <span class="type-meta">Core Sync</span>
+                </div>
+                <div class="flex-col" style="align-items: center; gap: 8px;">
+                  <div class="waveform-bars"><span></span><span></span><span></span><span></span><span></span></div>
+                  <span class="type-meta">Waveform</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Linear Indeterminate & Determinate -->
+            <div class="demo-box">
+              <div class="demo-label">LINEAR PROGRESS TRACKS</div>
+              <div class="flex-col">
+                <div>
+                  <div class="slider-header" style="margin-bottom: 6px;">
+                    <span>Indeterminate Stream</span>
+                    <span style="color: var(--md-sys-color-secondary);">ACTIVE</span>
+                  </div>
+                  <div class="linear-track"><div class="linear-indeterminate-bar"></div></div>
+                </div>
+                <div>
+                  <div class="slider-header" style="margin-bottom: 6px;">
+                    <span>Determinate Upload</span>
+                    <span id="det-percent" style="color: var(--md-sys-color-primary); font-weight: 700;">72%</span>
+                  </div>
+                  <div class="linear-track"><div id="det-bar" class="linear-determinate-fill" style="width: 72%;"></div></div>
+                </div>
+                <div class="flex-row">
+                  <button class="m3-btn m3-btn-outlined" style="min-height: 36px; padding: 4px 12px; font-size: 0.72rem;" onclick="adjustProgress(-15)">-15%</button>
+                  <button class="m3-btn m3-btn-outlined" style="min-height: 36px; padding: 4px 12px; font-size: 0.72rem;" onclick="adjustProgress(15)">+15%</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Skeleton Shimmer Placeholder -->
+            <div class="demo-box">
+              <div class="demo-label">SKELETON SHIMMER PLACEHOLDER</div>
+              <div class="flex-row" style="align-items: center;">
+                <div class="skeleton-block" style="width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;"></div>
+                <div class="flex-col" style="flex: 1; gap: 8px;">
+                  <div class="skeleton-block" style="width: 60%;"></div>
+                  <div class="skeleton-block" style="width: 90%;"></div>
+                </div>
+              </div>
+              <div class="skeleton-block" style="width: 100%; height: 48px;"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             11. M3 CARDS (ELEVATED, FILLED, OUTLINED, MEDIA TELEMETRY)
+             ==================================================================== -->
+        <section id="sec-cards" class="component-section" data-keywords="cards elevated filled outlined media telemetry">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">11 // CONTAINMENT SURFACES</span>
+              <h2 class="section-heading">Elevated, Filled, Outlined & Media Telemetry Cards</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('cards')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-3">
+            <article class="m3-card elevated">
+              <span class="section-index">SURFACE // ELEVATED</span>
+              <h3 style="font-size: 1.1rem;">Dharma Spire Relay</h3>
+              <p class="type-meta">Uses tonal surface elevation + ambient shadow separation for primary interactive focal points.</p>
+              <div class="flex-row" style="margin-top: auto;">
+                <button class="m3-btn m3-btn-tonal" onclick="pushSnackbar('CONNECTED TO RELAY')">CONNECT</button>
+              </div>
+            </article>
+
+            <article class="m3-card filled">
+              <span class="section-index">SURFACE // FILLED</span>
+              <h3 style="font-size: 1.1rem;">Cybervoid Node 09</h3>
+              <p class="type-meta">High-contrast filled container surface ideal for grouping dense telemetry blocks without borders.</p>
+              <div class="flex-row" style="margin-top: auto;">
+                <button class="m3-btn m3-btn-outlined" onclick="pushSnackbar('INSPECTING NODE 09')">INSPECT</button>
+              </div>
+            </article>
+
+            <article class="m3-card outlined">
+              <div class="card-media-banner">// TELEMETRY FEED 4K</div>
+              <h3 style="font-size: 1.1rem;">Outlined Media Card</h3>
+              <p class="type-meta">1px outline hairline containment with integrated header media viewport and action row.</p>
+              <div class="flex-row" style="justify-content: flex-end; margin-top: auto;">
+                <button class="m3-btn m3-btn-text" onclick="pushSnackbar('ARCHIVED FEED')">ARCHIVE</button>
+                <button class="m3-btn m3-btn-filled" onclick="pushSnackbar('LAUNCHING FEED')">LAUNCH</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             12. M3 LISTS, SORTABLE DATA TABLE & EXPANSION ACCORDION
+             ==================================================================== -->
+        <section id="sec-data" class="component-section" data-keywords="lists data table sortable accordion expansion">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">12 // STRUCTURED DATA</span>
+              <h2 class="section-heading">1/2/3-Line M3 Lists, Sortable Data Table & Accordions</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('data')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-2">
+            <!-- M3 List Items -->
+            <div class="flex-col">
+              <div class="demo-label">M3 LIST ITEMS (AVATAR, SUPPORTING TEXT & TRAILING)</div>
+              <div class="m3-list">
+                <div class="m3-list-item">
+                  <div class="list-avatar">GR</div>
+                  <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 0.9rem;">Unit GR-74 // Primary Core</div>
+                    <div class="type-meta">Latency: 0.04ms • Neural Link Synchronized</div>
+                  </div>
+                  <span class="status-pill status-online">ONLINE</span>
+                </div>
+                <div class="m3-list-item">
+                  <div class="list-avatar" style="background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-secondary);">AR</div>
+                  <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 0.9rem;">Architect Mainframe</div>
+                    <div class="type-meta">Encrypted AI consciousness • Level 18 Vault</div>
+                  </div>
+                  <span class="status-pill status-warn">LOCKED</span>
+                </div>
+                <div class="m3-list-item">
+                  <div class="list-avatar" style="background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-tertiary);">KM</div>
+                  <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 0.9rem;">Keymaster Mara</div>
+                    <div class="type-meta">Dharma Tower Security Directorate • Hostile</div>
+                  </div>
+                  <span class="status-pill status-crit">ALERT</span>
+                </div>
+              </div>
+
+              <!-- Expansion Accordions -->
+              <div class="accordion-box open">
+                <button class="accordion-head" onclick="this.parentElement.classList.toggle('open')">
+                  <span>// ACCORDION: ATMOSPHERIC SCRUBBER TELEMETRY</span>
+                  <span>+</span>
+                </button>
+                <div class="accordion-body">
+                  Lower sector filtration arrays are operating at 38% efficiency. Extended exposure without respirator implants is not advised.
+                </div>
+              </div>
+              <div class="accordion-box">
+                <button class="accordion-head" onclick="this.parentElement.classList.toggle('open')">
+                  <span>// ACCORDION: CYBERNETIC REFLEX CALIBRATION</span>
+                  <span>+</span>
+                </button>
+                <div class="accordion-body">
+                  Synaptic accelerators tuned to 144Hz predictive trajectory calculation for incoming ballistic projectiles.
+                </div>
+              </div>
+            </div>
+
+            <!-- Sortable M3 Data Table -->
+            <div class="flex-col">
+              <div class="demo-label">SORTABLE M3 DATA TABLE (CLICK HEADERS TO SORT)</div>
+              <div class="table-scroll">
+                <table id="telemetry-table" class="m3-table">
+                  <thead>
+                    <tr>
+                      <th onclick="sortTable(0)">NODE ID ↕</th>
+                      <th onclick="sortTable(1)">SECTOR ↕</th>
+                      <th onclick="sortTable(2)">LOAD % ↕</th>
+                      <th>STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>ND-04</td>
+                      <td>Base District</td>
+                      <td>42%</td>
+                      <td><span class="status-pill status-online">NOMINAL</span></td>
+                    </tr>
+                    <tr>
+                      <td>ND-11</td>
+                      <td>Cybervoid Gate</td>
+                      <td>89%</td>
+                      <td><span class="status-pill status-crit">OVERLOAD</span></td>
+                    </tr>
+                    <tr>
+                      <td>ND-07</td>
+                      <td>Dharma Atrium</td>
+                      <td>64%</td>
+                      <td><span class="status-pill status-warn">ELEVATED</span></td>
+                    </tr>
+                    <tr>
+                      <td>ND-02</td>
+                      <td>Sub-Reactor</td>
+                      <td>19%</td>
+                      <td><span class="status-pill status-online">NOMINAL</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             13 & 14. DIALOGS, BOTTOM/SIDE SHEETS, MENUS, TOOLTIPS, BADGES, SNACKBAR
+             ==================================================================== -->
+        <section id="sec-overlays" class="component-section" data-keywords="dialog modal bottom sheet side sheet drawer menu tooltip badge snackbar toast">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">13 & 14 // OVERLAYS, MENUS & FEEDBACK</span>
+              <h2 class="section-heading">Dialogs, Bottom/Side Sheets, Menus, Tooltips & Badges</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('overlays')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-2">
+            <!-- Modal, Bottom Sheet, Side Sheet Triggers -->
+            <div class="demo-box">
+              <div class="demo-label">DIALOGS, BOTTOM SHEET & SIDE SHEET DRAWER</div>
+              <div class="flex-row">
+                <button class="m3-btn m3-btn-filled" onclick="toggleOverlay('demo-dialog', true)">
+                  OPEN ALERT DIALOG
+                </button>
+                <button class="m3-btn m3-btn-tonal" onclick="toggleOverlay('demo-bottom-sheet', true)">
+                  SLIDE BOTTOM SHEET
+                </button>
+                <button class="m3-btn m3-btn-outlined" onclick="toggleOverlay('demo-side-sheet', true)">
+                  OPEN SIDE SHEET
+                </button>
+              </div>
+            </div>
+
+            <!-- Context Menu, Hover Tooltips, Badges & Snackbar -->
+            <div class="demo-box">
+              <div class="demo-label">DROPDOWN MENU, TOOLTIPS, BADGES & SNACKBAR</div>
+              <div class="flex-row">
+                <!-- Context Menu -->
+                <div class="menu-anchor">
+                  <button class="m3-btn m3-btn-elevated" onclick="toggleDropdown('context-menu')">
+                    CONTEXT MENU ▾
+                  </button>
+                  <div id="context-menu" class="m3-dropdown-menu">
+                    <button class="menu-action" onclick="pushSnackbar('CLONED NEURAL PROFILE'); closeAllDropdowns()">Duplicate Node</button>
+                    <button class="menu-action" onclick="pushSnackbar('EXPORTED TELEMETRY JSON'); closeAllDropdowns()">Export JSON</button>
+                    <button class="menu-action" style="color: var(--md-sys-color-error);" onclick="pushSnackbar('PURGED CACHE'); closeAllDropdowns()">Purge Memory</button>
+                  </div>
+                </div>
+
+                <!-- Tooltip Host -->
+                <div class="tooltip-host">
+                  <button class="m3-btn m3-btn-outlined">HOVER TOOLTIP</button>
+                  <div class="m3-tooltip">M3 Rich Telemetry Tooltip // 0.04ms</div>
+                </div>
+
+                <!-- Numeric & Dot Badges -->
+                <div class="badge-wrap">
+                  <button class="icon-btn tonal" aria-label="Notifications" onclick="pushSnackbar('3 UNREAD SYSTEM ALERTS')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                  </button>
+                  <span class="badge-count">3</span>
+                </div>
+
+                <div class="badge-wrap">
+                  <button class="icon-btn outlined" aria-label="Live Uplink" onclick="pushSnackbar('UPLINK ACTIVE')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49"/></svg>
+                  </button>
+                  <span class="badge-dot"></span>
+                </div>
+
+                <button class="m3-btn m3-btn-text" onclick="pushSnackbar('CHECKPOINT SAVED TO CYBERVOID', true)">
+                  SNACKBAR + UNDO
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================================
+             15. DATE PICKER, TIME PICKER & MULTI-STEP WIZARD
+             ==================================================================== -->
+        <section id="sec-pickers" class="component-section" data-keywords="date picker calendar time picker stepper wizard">
+          <div class="section-header">
+            <div class="section-title-group">
+              <span class="section-index">15 // TEMPORAL & WORKFLOWS</span>
+              <h2 class="section-heading">Interactive Date Picker, Time Selector & Multi-Step Wizard</h2>
+            </div>
+            <button class="inspect-btn" onclick="openSnippet('pickers')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              COPY SNIPPET
+            </button>
+          </div>
+
+          <div class="sub-grid-3">
+            <!-- Interactive Date Picker -->
+            <div class="calendar-card">
+              <div class="flex-row" style="justify-content: space-between;">
+                <span class="demo-label">NOV 2026 // MISSION DATE</span>
+                <span id="selected-date-label" style="font-family: var(--font-mono); font-size: 0.74rem; color: var(--md-sys-color-secondary); font-weight: 700;">NOV 20</span>
+              </div>
+              <div id="calendar-grid" class="calendar-grid"></div>
+            </div>
+
+            <!-- Interactive Time Picker -->
+            <div class="demo-box">
+              <div class="demo-label">M3 TIME SELECTOR (24H)</div>
+              <div class="time-inputs">
+                <input id="time-hh" type="number" class="time-box" min="0" max="23" value="21" aria-label="Hour" />
+                <span style="font-family: var(--font-mono); font-size: 1.5rem; font-weight: 700;">:</span>
+                <input id="time-mm" type="number" class="time-box" min="0" max="59" value="45" aria-label="Minute" />
+              </div>
+              <button class="m3-btn m3-btn-tonal" onclick="pushSnackbar('INFILTRATION SCHEDULED FOR ' + document.getElementById('time-hh').value + ':' + document.getElementById('time-mm').value)">
+                LOCK TIMESTAMP
+              </button>
+            </div>
+
+            <!-- Interactive Multi-Step Wizard -->
+            <div class="demo-box">
+              <div class="demo-label">INTERACTIVE MULTI-STEP WIZARD</div>
+              <div class="stepper-header">
+                <div id="wiz-step-1" class="step-node active">
+                  <div class="step-circle">1</div>
+                  <span>SYNC</span>
+                </div>
+                <div class="step-divider"></div>
+                <div id="wiz-step-2" class="step-node">
+                  <div class="step-circle">2</div>
+                  <span>BREACH</span>
+                </div>
+                <div class="step-divider"></div>
+                <div id="wiz-step-3" class="step-node">
+                  <div class="step-circle">3</div>
+                  <span>EXTRACT</span>
+                </div>
+              </div>
+              <p id="wiz-desc" class="type-meta" style="min-height: 44px;">Step 1: Calibrating neural link with Cybervoid relay beacons.</p>
+              <div class="flex-row" style="justify-content: space-between; margin-top: auto;">
+                <button class="m3-btn m3-btn-outlined" onclick="advanceWizard(-1)">BACK</button>
+                <button class="m3-btn m3-btn-filled" onclick="advanceWizard(1)">NEXT STEP</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       OVERLAYS: ALERT DIALOG, BOTTOM SHEET, SIDE SHEET & CODE INSPECTOR
+       ========================================================================== -->
+  <!-- Alert Dialog -->
+  <div id="demo-dialog" class="overlay-scrim" onclick="if(event.target === this) toggleOverlay('demo-dialog', false)">
+    <div class="dialog-surface" role="dialog" aria-modal="true">
+      <div class="brand-eyebrow">// M3 ALERT DIALOG</div>
+      <h3 style="font-family: var(--font-display); font-size: 1.35rem;">PURGE CYBERVOID CACHE?</h3>
+      <p style="font-size: 0.9rem; color: var(--md-sys-color-on-surface-variant);">
+        Terminating the active neural session will reset unsaved checkpoints across Dharma Tower Sector 04.
+      </p>
+      <div class="flex-row" style="justify-content: flex-end; margin-top: 8px;">
+        <button class="m3-btn m3-btn-text" onclick="toggleOverlay('demo-dialog', false)">CANCEL</button>
+        <button class="m3-btn m3-btn-filled" onclick="toggleOverlay('demo-dialog', false); pushSnackbar('CACHE PURGED')">CONFIRM</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide-Up Bottom Sheet -->
+  <div id="demo-bottom-sheet" class="bottom-sheet-scrim" onclick="if(event.target === this) toggleOverlay('demo-bottom-sheet', false)">
+    <div class="bottom-sheet-panel">
+      <div class="sheet-drag-handle"></div>
+      <div class="flex-row" style="justify-content: space-between;">
+        <h3 style="font-family: var(--font-display); font-size: 1.2rem;">M3 MODAL BOTTOM SHEET</h3>
+        <button class="icon-btn" onclick="toggleOverlay('demo-bottom-sheet', false)" aria-label="Close Bottom Sheet">✕</button>
+      </div>
+      <p class="type-meta">Responsive mobile-first sheet drawer with drag handle and quick tactical actions.</p>
+      <div class="m3-list">
+        <button class="m3-list-item" style="background: transparent; border: none; color: inherit; cursor: pointer; text-align: left;" onclick="toggleOverlay('demo-bottom-sheet', false); pushSnackbar('SHARED TELEMETRY LINK')">
+          <div class="list-avatar">01</div>
+          <div><strong>Share Telemetry Stream</strong><div class="type-meta">Generate encrypted relay URL</div></div>
+        </button>
+        <button class="m3-list-item" style="background: transparent; border: none; color: inherit; cursor: pointer; text-align: left;" onclick="toggleOverlay('demo-bottom-sheet', false); pushSnackbar('DOWNLOADED DIAGNOSTIC LOG')">
+          <div class="list-avatar">02</div>
+          <div><strong>Download Diagnostic Archive</strong><div class="type-meta">Export full JSON system state</div></div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide-Over Side Sheet -->
+  <div id="demo-side-sheet" class="side-sheet-scrim" onclick="if(event.target === this) toggleOverlay('demo-side-sheet', false)">
+    <div class="side-sheet-panel">
+      <div class="flex-row" style="justify-content: space-between;">
+        <h3 style="font-family: var(--font-display); font-size: 1.2rem;">M3 SIDE SHEET DRAWER</h3>
+        <button class="icon-btn" onclick="toggleOverlay('demo-side-sheet', false)" aria-label="Close Side Sheet">✕</button>
+      </div>
+      <p class="type-meta">Contextual side sheet for filtering parameters or inspecting secondary node metadata without losing page context.</p>
+      <div class="demo-box">
+        <div class="demo-label">ACTIVE PARAMETERS</div>
+        <label class="control-item"><input type="checkbox" checked /><span class="m3-checkbox-box">✓</span><span>Hardware Acceleration</span></label>
+        <label class="control-item"><input type="checkbox" checked /><span class="m3-checkbox-box">✓</span><span>8px Spatial Grid</span></label>
+        <label class="control-item"><input type="checkbox" /><span class="m3-checkbox-box">✓</span><span>CRT Scanline Pass</span></label>
+      </div>
+      <div class="flex-row" style="margin-top: auto; justify-content: flex-end;">
+        <button class="m3-btn m3-btn-filled" onclick="toggleOverlay('demo-side-sheet', false); pushSnackbar('SIDE SHEET SETTINGS APPLIED')">APPLY & CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Code Snippet Inspector Drawer -->
+  <div id="snippet-drawer" class="side-sheet-scrim" onclick="if(event.target === this) toggleOverlay('snippet-drawer', false)">
+    <div class="side-sheet-panel">
+      <div class="flex-row" style="justify-content: space-between;">
+        <div>
+          <div class="brand-eyebrow">// COMPONENT INSPECTOR</div>
+          <h3 id="snippet-title" style="font-family: var(--font-display); font-size: 1.2rem;">HTML / CSS SNIPPET</h3>
+        </div>
+        <button class="icon-btn" onclick="toggleOverlay('snippet-drawer', false)" aria-label="Close Inspector">✕</button>
+      </div>
+      <pre id="snippet-code" class="code-pre"></pre>
+      <div class="flex-row" style="justify-content: flex-end;">
+        <button class="m3-btn m3-btn-filled" onclick="copyCurrentSnippet()">COPY TO CLIPBOARD</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- M3 SNACKBAR -->
+  <div id="m3-snackbar" class="m3-snackbar" role="status">
+    <span id="snackbar-msg">SYSTEM READY</span>
+    <div class="flex-row" style="gap: 8px;">
+      <button id="snackbar-undo" class="m3-btn m3-btn-text" style="min-height: 36px; padding: 0 10px; display: none;" onclick="hideSnackbar(); pushSnackbar('ACTION REVERTED')">UNDO</button>
+      <button class="icon-btn" style="width: 36px; height: 36px;" onclick="hideSnackbar()" aria-label="Dismiss notification">✕</button>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       DESIGN SYSTEM INTERACTIVITY & STATE ENGINE
+       ========================================================================== */
+    let snackTimer = null;
+    let currentWizardStep = 1;
+    let currentPage = 1;
+    let currentProgress = 72;
+
+    const SNIPPETS = {
+      tokens: `/* M3 + Tactical Adaptive Tokens */
+:root {
+  --md-sys-color-primary: #ff2a3c;
+  --md-sys-color-secondary: #00f0ff;
+  --md-sys-color-tertiary: #ffb800;
+  --md-sys-color-surface-container: #12161d;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}`,
+      buttons: `<!-- M3 Filled, Tonal, Outlined & Split Buttons -->
+<button class="m3-btn m3-btn-skew m3-btn-filled"><span>FILLED PRIMARY</span></button>
+<button class="m3-btn m3-btn-skew m3-btn-tonal"><span>FILLED TONAL</span></button>
+<button class="m3-btn m3-btn-outlined">OUTLINED</button>
+<button class="m3-btn m3-btn-elevated">ELEVATED</button>`,
+      fabs: `<!-- M3 Segmented Group & Morphing Extended FAB -->
+<div class="segmented-btn-row" data-mode="single">
+  <button class="seg-option selected">✓ BLINK</button>
+  <button class="seg-option">SURGE</button>
+</div>
+<button class="m3-fab fab-extended" onclick="this.classList.toggle('collapsed')">
+  <span class="fab-label">MORPH FAB</span>
+</button>`,
+      inputs: `<!-- M3 Outlined Text Field with Floating Label -->
+<div class="m3-field">
+  <div class="m3-field-box outlined">
+    <input id="callsign" type="text" class="m3-field-input" placeholder=" " />
+    <label class="m3-floating-label" for="callsign">OPERATIVE CALLSIGN</label>
+  </div>
+</div>`,
+      controls: `<!-- M3 Switch & Tri-State Checkbox -->
+<label class="control-item">
+  <span>SENSORY BOOST</span>
+  <input type="checkbox" checked />
+  <div class="m3-switch-track"><div class="m3-switch-thumb"></div></div>
+</label>`,
+      sliders: `<!-- M3 Continuous Range Slider -->
+<input type="range" class="m3-range" min="0" max="100" value="68" />`,
+      chips: `<!-- M3 Filter & Dismissible Input Chips -->
+<button class="m3-chip selected"><span>✓ FILTER: CYBERVOID</span></button>
+<div class="m3-chip selected"><span>NODE: ARCHITECT</span><span class="chip-close">✕</span></div>`,
+      nav: `<!-- M3 Bottom Navigation Bar with Pill Indicator -->
+<nav class="m3-bottom-nav">
+  <button class="bottom-nav-btn active">
+    <div class="bottom-nav-pill">...</div>
+    <span>COMBAT HUD</span>
+  </button>
+</nav>`,
+      tabs: `<!-- M3 Primary Tabs with Animated Indicator -->
+<div class="m3-tabs-header">
+  <button class="m3-tab-trigger active">KATANA</button>
+  <button class="m3-tab-trigger">BLINK</button>
+  <div class="tab-indicator-bar"></div>
+</div>`,
+      loaders: `<!-- M3 Ring, Core Spinner & Linear Progress -->
+<svg class="m3-ring" viewBox="0 0 50 50"><circle cx="25" cy="25" r="20"></circle></svg>
+<div class="linear-track"><div class="linear-indeterminate-bar"></div></div>`,
+      cards: `<!-- M3 Elevated, Filled & Outlined Cards -->
+<article class="m3-card elevated">
+  <h3>Dharma Spire Relay</h3>
+  <p>Tonal surface elevation + shadow depth.</p>
+</article>`,
+      data: `<!-- M3 List Item & Expansion Accordion -->
+<div class="m3-list-item">
+  <div class="list-avatar">GR</div>
+  <div><strong>Unit GR-74</strong></div>
+  <span class="status-pill status-online">ONLINE</span>
+</div>`,
+      overlays: `<!-- M3 Alert Dialog & Slide-Up Bottom Sheet -->
+<div class="dialog-surface" role="dialog" aria-modal="true">
+  <h3>PURGE CYBERVOID CACHE?</h3>
+</div>`,
+      pickers: `<!-- M3 Time Picker & Multi-Step Wizard -->
+<div class="time-inputs">
+  <input type="number" class="time-box" value="21" /> :
+  <input type="number" class="time-box" value="45" />
+</div>`
+    };
+
+    /* 1. Theme Mode Switcher ('tactical' | 'slick' | 'daylight') */
+    function setThemeMode(mode) {
+      document.body.classList.remove('mode-slick', 'mode-daylight');
+      if (mode === 'slick') document.body.classList.add('mode-slick');
+      if (mode === 'daylight') document.body.classList.add('mode-daylight');
+
+      document.getElementById('theme-tactical').classList.toggle('active', mode === 'tactical');
+      document.getElementById('theme-slick').classList.toggle('active', mode === 'slick');
+      document.getElementById('theme-daylight').classList.toggle('active', mode === 'daylight');
+
+      const labels = {
+        tactical: 'MODE: TACTICAL CHAMFER',
+        slick: 'MODE: MINIMAL SLICK (M3)',
+        daylight: 'MODE: DAYLIGHT LAB (M3 LIGHT)'
+      };
+      pushSnackbar(labels[mode]);
+    }
+
+    /* 2. Live Component Filter */
+    function filterComponents(query) {
+      const q = query.trim().toLowerCase();
+      const clearBtn = document.getElementById('global-filter-clear');
+      clearBtn.classList.toggle('visible', q.length > 0);
+
+      document.querySelectorAll('.component-section').forEach(sec => {
+        const text = (sec.innerText + ' ' + (sec.dataset.keywords || '')).toLowerCase();
+        sec.classList.toggle('hidden-by-filter', q.length > 0 && !text.includes(q));
+      });
+    }
+
+    function clearGlobalFilter() {
+      const input = document.getElementById('global-filter');
+      input.value = '';
+      filterComponents('');
+      input.focus();
+    }
+
+    /* 3. Clipboard Helpers (Using execCommand fallback for iFrame safety) */
+    function copyString(str, toastMsg) {
+      const ta = document.createElement('textarea');
+      ta.value = str;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        pushSnackbar(toastMsg);
+      } catch (e) {
+        pushSnackbar('COPY READY');
+      }
+      document.body.removeChild(ta);
+    }
+
+    function copyToken(tokenVar) {
+      copyString(`var(${tokenVar})`, `COPIED TOKEN: var(${tokenVar})`);
+    }
+
+    function openSnippet(key) {
+      document.getElementById('snippet-title').textContent = `${key.toUpperCase()} // HTML & CSS`;
+      document.getElementById('snippet-code').textContent = SNIPPETS[key] || '';
+      toggleOverlay('snippet-drawer', true);
+    }
+
+    function copyCurrentSnippet() {
+      const code = document.getElementById('snippet-code').textContent;
+      copyString(code, 'COMPONENT SNIPPET COPIED TO CLIPBOARD');
+    }
+
+    /* 4. Async Button Simulation */
+    function simulateAsyncBtn(btn) {
+      if (btn.dataset.loading === '1') return;
+      btn.dataset.loading = '1';
+      const orig = btn.innerHTML;
+      btn.innerHTML = `<svg class="m3-ring" style="width:18px;height:18px;" viewBox="0 0 50 50"><circle cx="25" cy="25" r="20"></circle></svg><span>SYNCING...</span>`;
+      setTimeout(() => {
+        btn.innerHTML = orig;
+        btn.dataset.loading = '0';
+        pushSnackbar('KERNEL SYNCHRONIZATION COMPLETE');
+      }, 1400);
+    }
+
+    /* 5. Segmented Button Handler */
+    function handleSegmentClick(btn) {
+      const group = btn.parentElement;
+      const mode = group.dataset.mode;
+      if (mode === 'single') {
+        group.querySelectorAll('.seg-option').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      } else {
+        btn.classList.toggle('selected');
+      }
+    }
+
+    /* 6. Validation & Autocomplete Search */
+    function validateCallsign(val) {
+      const box = document.getElementById('outlined-callsign-box');
+      const helper = document.getElementById('callsign-helper');
+      if (val.trim().length < 4) {
+        box.classList.add('error');
+        helper.classList.add('error');
+        helper.innerHTML = `<span>Error: Minimum 4 characters required</span><span>INVALID</span>`;
+      } else {
+        box.classList.remove('error');
+        helper.classList.remove('error');
+        helper.innerHTML = `<span>Callsign format valid</span><span>VERIFIED</span>`;
+      }
+    }
+
+    const SECTORS = [
+      { name: 'SECTOR 01 // BASE DISTRICT', status: 'TOXIC AIR' },
+      { name: 'SECTOR 04 // DHARMA ATRIUM', status: 'ACTIVE' },
+      { name: 'SECTOR 09 // CYBERVOID RELAY', status: 'ENCRYPTED' },
+      { name: 'SECTOR 14 // REACTOR CORE', status: 'CRITICAL' }
+    ];
+
+    function filterSectors(query) {
+      const menu = document.getElementById('sector-menu');
+      const q = query.trim().toLowerCase();
+      const matches = SECTORS.filter(s => s.name.toLowerCase().includes(q));
+      if (!matches.length) {
+        menu.classList.remove('open');
+        return;
+      }
+      menu.innerHTML = matches.map(s => `
+        <button class="autocomplete-item" onclick="selectSector('${s.name}')">
+          <span>${s.name}</span>
+          <span style="font-size:0.68rem; color:var(--md-sys-color-secondary);">${s.status}</span>
+        </button>
+      `).join('');
+      menu.classList.add('open');
+    }
+
+    function selectSector(name) {
+      document.getElementById('sector-search').value = name;
+      document.getElementById('sector-menu').classList.remove('open');
+      pushSnackbar(`SELECTED: ${name}`);
+    }
+
+    /* 7. Tri-State Checkboxes & Rating */
+    function toggleParentCheck(parent) {
+      const children = document.querySelectorAll('.child-check');
+      parent.dataset.indeterminate = 'false';
+      document.getElementById('parent-check-box').textContent = parent.checked ? '✓' : '';
+      children.forEach(c => c.checked = parent.checked);
+    }
+
+    function syncParentCheck() {
+      const parent = document.getElementById('parent-check');
+      const box = document.getElementById('parent-check-box');
+      const children = Array.from(document.querySelectorAll('.child-check'));
+      const checkedCount = children.filter(c => c.checked).length;
+
+      if (checkedCount === 0) {
+        parent.checked = false;
+        parent.dataset.indeterminate = 'false';
+        box.textContent = '';
+      } else if (checkedCount === children.length) {
+        parent.checked = true;
+        parent.dataset.indeterminate = 'false';
+        box.textContent = '✓';
+      } else {
+        parent.checked = false;
+        parent.dataset.indeterminate = 'true';
+        box.textContent = '—';
+      }
+    }
+
+    function setRating(val) {
+      document.getElementById('rating-readout').textContent = `${val} / 5`;
+      document.querySelectorAll('#rating-bar .rating-btn').forEach((btn, idx) => {
+        btn.classList.toggle('active', idx < val);
+      });
+    }
+
+    /* 8. Dual-Thumb Range Slider */
+    function updateDualRange() {
+      const minEl = document.getElementById('dual-min');
+      const maxEl = document.getElementById('dual-max');
+      let v1 = parseInt(minEl.value, 10);
+      let v2 = parseInt(maxEl.value, 10);
+      if (v1 > v2) { [v1, v2] = [v2, v1]; }
+      document.getElementById('dual-fill').style.left = v1 + '%';
+      document.getElementById('dual-fill').style.width = (v2 - v1) + '%';
+      document.getElementById('val-dual').textContent = `${v1} — ${v2} GHz`;
+    }
+
+    /* 9. Chips */
+    function toggleFilterChip(chip) {
+      chip.classList.toggle('selected');
+      const span = chip.querySelector('span');
+      const raw = span.textContent.replace(/^[✓+]\s*/, '');
+      span.textContent = (chip.classList.contains('selected') ? '✓ ' : '+ ') + raw;
+    }
+
+    function addSuggestionChip(label) {
+      const list = document.getElementById('input-chip-list');
+      const chip = document.createElement('div');
+      chip.className = 'm3-chip selected';
+      chip.innerHTML = `<span>NODE: ${label}</span><span class="chip-close">✕</span>`;
+      chip.onclick = () => { chip.remove(); pushSnackbar(`REMOVED TAG: ${label}`); };
+      list.insertBefore(chip, list.lastElementChild);
+      pushSnackbar(`ADDED TAG: ${label}`);
+    }
+
+    /* 10. Navigation & Pagination */
+    function activateBottomNav(btn) {
+      btn.parentElement.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function setPage(btn) {
+      currentPage = parseInt(btn.textContent, 10);
+      document.querySelectorAll('.pagination-row .page-btn').forEach(b => {
+        b.classList.toggle('active', parseInt(b.textContent, 10) === currentPage);
+      });
+    }
+
+    function stepPage(delta) {
+      const next = Math.min(4, Math.max(1, currentPage + delta));
+      const btns = Array.from(document.querySelectorAll('.pagination-row .page-btn'));
+      const target = btns.find(b => parseInt(b.textContent, 10) === next);
+      if (target) setPage(target);
+    }
+
+    /* 11. Tabs & Carousel */
+    const TAB_COPY = [
+      '<strong>Monomolecular Katana:</strong> Precision-forged alloy capable of severing reinforced cybernetic plating and deflecting high-caliber rounds.',
+      '<strong>Blink Vector Dash:</strong> Instantaneous short-range spatial displacement that avoids laser grids and enemy sightlines.',
+      '<strong>Overlord Neural Hack:</strong> Overrides enemy cybernetic transponders, converting hostile units into temporary allies.'
+    ];
+
+    function switchM3Tab(index, btn) {
+      document.querySelectorAll('.m3-tab-trigger').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('m3-tab-bar').style.transform = `translateX(${index * 100}%)`;
+      document.getElementById('m3-tab-content').innerHTML = TAB_COPY[index];
+    }
+
+    function scrollCarousel(offset) {
+      document.getElementById('m3-carousel').scrollBy({ left: offset, behavior: 'smooth' });
+    }
+
+    /* 12. Determinate Progress */
+    function adjustProgress(delta) {
+      currentProgress = Math.min(100, Math.max(0, currentProgress + delta));
+      document.getElementById('det-bar').style.width = currentProgress + '%';
+      document.getElementById('det-percent').textContent = currentProgress + '%';
+    }
+
+    /* 13. Sortable Table */
+    let sortAsc = true;
+    function sortTable(colIndex) {
+      const tbody = document.querySelector('#telemetry-table tbody');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.sort((a, b) => {
+        const A = a.children[colIndex].textContent.trim();
+        const B = b.children[colIndex].textContent.trim();
+        return sortAsc ? A.localeCompare(B, undefined, { numeric: true }) : B.localeCompare(A, undefined, { numeric: true });
+      });
+      sortAsc = !sortAsc;
+      rows.forEach(r => tbody.appendChild(r));
+    }
+
+    /* 14. Menus, Overlays & Snackbar */
+    function toggleDropdown(id) {
+      const target = document.getElementById(id);
+      const isOpen = target.classList.contains('open');
+      closeAllDropdowns();
+      if (!isOpen) target.classList.add('open');
+    }
+
+    function closeAllDropdowns() {
+      document.querySelectorAll('.m3-dropdown-menu, .autocomplete-menu').forEach(m => m.classList.remove('open'));
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.menu-anchor') && !e.target.closest('.autocomplete-wrap')) {
+        closeAllDropdowns();
+      }
+    });
+
+    function toggleOverlay(id, show) {
+      document.getElementById(id).classList.toggle('open', show);
+    }
+
+    function pushSnackbar(msg, withUndo = false) {
+      const bar = document.getElementById('m3-snackbar');
+      document.getElementById('snackbar-msg').textContent = msg;
+      document.getElementById('snackbar-undo').style.display = withUndo ? 'inline-flex' : 'none';
+      bar.classList.add('visible');
+      clearTimeout(snackTimer);
+      snackTimer = setTimeout(hideSnackbar, 3400);
+    }
+
+    function hideSnackbar() {
+      document.getElementById('m3-snackbar').classList.remove('visible');
+    }
+
+    /* 15. Calendar Grid & Multi-Step Wizard */
+    function initCalendar() {
+      const grid = document.getElementById('calendar-grid');
+      const days = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+      let html = days.map(d => `<div class="cal-day-head">${d}</div>`).join('');
+      for (let d = 1; d <= 30; d++) {
+        html += `<button class="cal-day-btn ${d === 20 ? 'selected' : ''}" onclick="selectCalDay(this, ${d})">${d}</button>`;
+      }
+      grid.innerHTML = html;
+    }
+
+    function selectCalDay(btn, day) {
+      document.querySelectorAll('.cal-day-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      document.getElementById('selected-date-label').textContent = `NOV ${String(day).padStart(2, '0')}`;
+    }
+
+    const WIZARD_COPY = {
+      1: 'Step 1: Calibrating neural link with Cybervoid relay beacons.',
+      2: 'Step 2: Bypassing Dharma Tower firewall encryption layers.',
+      3: 'Step 3: Extracting core telemetry and locking extraction vector.'
+    };
+
+    function advanceWizard(delta) {
+      currentWizardStep = Math.min(3, Math.max(1, currentWizardStep + delta));
+      for (let i = 1; i <= 3; i++) {
+        const node = document.getElementById(`wiz-step-${i}`);
+        node.classList.remove('active', 'completed');
+        if (i < currentWizardStep) node.classList.add('completed');
+        if (i === currentWizardStep) node.classList.add('active');
+      }
+      document.getElementById('wiz-desc').textContent = WIZARD_COPY[currentWizardStep];
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initCalendar();
+    });
+  </script>
+</body>
+</html>

@@ -1821,6 +1821,42 @@ export class FirstPersonController {
   }
 
   /**
+   * Shove the player away from a source.
+   *
+   * A blocked Sword Elite hit uses this instead of a teleport: the player
+   * keeps control, but the momentum is owned by the knockback for a moment
+   * so the block reads as a real impact. Every other momentum system (dash,
+   * lunge, grapple, wall-run, slide) is cancelled before the shove.
+   */
+  knockbackFrom(source: BABYLON.Vector3, horizontalSpeed: number, lift: number) {
+    const position = this.position;
+    let dx = position.x - source.x;
+    let dz = position.z - source.z;
+    let length = Math.hypot(dx, dz);
+    if (length < 0.001) {
+      // Standing exactly on top of the source: fall back to the old heading.
+      dx = Math.sin(this.yaw);
+      dz = Math.cos(this.yaw);
+      length = Math.hypot(dx, dz) || 1;
+    }
+
+    if (this.grappleTarget) this.endGrapplePull('cancelled', false);
+    this.detachWallRun();
+    this.endSlide(false);
+    this.cancelSensoryBoost();
+    this.mantle.active = false;
+    this.dashTimeRemaining = 0;
+    this.lungeTimer = 0;
+    this.wallRunTime = 0;
+    this.jumpGraceTimer = 0;
+
+    this.velX = (dx / length) * horizontalSpeed;
+    this.velZ = (dz / length) * horizontalSpeed;
+    this.vy = Math.max(this.vy, lift);
+    this.grounded = false;
+  }
+
+  /**
    * Put the player back at the spawn point.
    *
    * Used when an incoming bolt hits: the player is dropped straight back at

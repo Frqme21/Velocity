@@ -77,6 +77,9 @@ export class InputManager {
   /** Fired when the attack button (left mouse) is pressed. */
   public onAttackPressed?: () => void;
 
+  /** Fired when the shuriken key (Q) is pressed. */
+  public onThrowPressed?: () => void;
+
   /**
    * Fired when the reset key (R) is pressed.
    *
@@ -116,6 +119,7 @@ export class InputManager {
       if (!this.locked || !this.enabled) return;
       event.preventDefault();
       if (event.code === 'Space' && !event.repeat) this.jumpLatch = true;
+      if (event.code === 'KeyQ' && !event.repeat) this.onThrowPressed?.();
       if (event.code === 'KeyA' && !event.repeat) this.leftLatch = true;
       if (event.code === 'KeyD' && !event.repeat) this.rightLatch = true;
       if ((event.code === 'ShiftLeft' || event.code === 'ShiftRight') && !event.repeat) {

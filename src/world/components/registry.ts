@@ -49,12 +49,31 @@ export type ComponentType =
   | 'cable_bundle'
   | 'grappleAnchor'
   | 'enemySpawn'
+  | 'smgSpawn'
+  | 'mechSpawn'
+  | 'swordEliteSpawn'
   | 'playerSpawn'
   | 'levelEnd'
   | 'textBillboard'
   | 'laserWall'
   | 'wallrun_panel'
   | 'light';
+
+/**
+ * Markers that only exist to place things in the editor.
+ *
+ * The game still reads their spawn data, but the glowing spheres and facing
+ * noses must never be drawn in the shipped level. The finish ring is NOT here:
+ * it is part of the level's look, so it stays visible in game exactly as it
+ * appears in the editor (1:1 export/load).
+ */
+export const EDITOR_ONLY_TYPES = new Set<ComponentType>([
+  'playerSpawn',
+  'enemySpawn',
+  'smgSpawn',
+  'mechSpawn',
+  'swordEliteSpawn',
+]);
 
 export interface ComponentProps {
   id: string;
@@ -746,6 +765,103 @@ export function buildDefaultRegistry(): ComponentRegistry {
       nose.position.set(0, 0, 0.5);
       nose.parent = marker;
       nose.material = reg.getPlain('#ffd0eb');
+      meshes.push(nose);
+      return {
+        meshes,
+        spawn: new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]),
+        facing,
+      };
+    },
+  });
+
+  // The Sword Elite is a separate spawner so a level can mix pistol guards
+  // with katana duelists. It uses the same spawn/facing props as Enemy Spawn
+  // so the editor inspector and the JSON round-trip work unchanged.
+  registry.register({
+    type: 'swordEliteSpawn',
+    label: 'Sword Elite Spawn',
+    category: 'Markers',
+    defaultScale: [1, 1, 1],
+    build: (scene, _physics, reg, props, shadowGenerator) => {
+      const meshes: BABYLON.AbstractMesh[] = [];
+      const facing = props.facing ?? 0;
+      const marker = BABYLON.MeshBuilder.CreateSphere(props.id, { diameter: 0.6, segments: 12 }, scene);
+      marker.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
+      marker.rotation.y = facing * Math.PI / 180;
+      marker.material = reg.getPlain('#ff4136');
+      marker.receiveShadows = true;
+      shadowGenerator?.addShadowCaster(marker);
+      meshes.push(marker);
+      // Red nose: the direction the Elite looks when the duel starts.
+      const nose = BABYLON.MeshBuilder.CreateBox(`${props.id}-facing`, {
+        width: 0.14, height: 0.14, depth: 0.7,
+      }, scene);
+      nose.position.set(0, 0, 0.5);
+      nose.parent = marker;
+      nose.material = reg.getPlain('#ffd2cf');
+      meshes.push(nose);
+      return {
+        meshes,
+        spawn: new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]),
+        facing,
+      };
+    },
+  });
+
+  // The SMG gunner uses its own marker so a level can mix pistol guards,
+  // UZI gunners, Mech robots and katana duelists freely.
+  registry.register({
+    type: 'smgSpawn',
+    label: 'SMG Spawn',
+    category: 'Markers',
+    defaultScale: [1, 1, 1],
+    build: (scene, _physics, reg, props, shadowGenerator) => {
+      const meshes: BABYLON.AbstractMesh[] = [];
+      const facing = props.facing ?? 0;
+      const marker = BABYLON.MeshBuilder.CreateSphere(props.id, { diameter: 0.6, segments: 12 }, scene);
+      marker.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
+      marker.rotation.y = facing * Math.PI / 180;
+      marker.material = reg.getPlain('#ffb02e');
+      marker.receiveShadows = true;
+      shadowGenerator?.addShadowCaster(marker);
+      meshes.push(marker);
+      const nose = BABYLON.MeshBuilder.CreateBox(`${props.id}-facing`, {
+        width: 0.14, height: 0.14, depth: 0.7,
+      }, scene);
+      nose.position.set(0, 0, 0.5);
+      nose.parent = marker;
+      nose.material = reg.getPlain('#ffe0a8');
+      meshes.push(nose);
+      return {
+        meshes,
+        spawn: new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]),
+        facing,
+      };
+    },
+  });
+
+  // The Mech marker shares the same facing props so the JSON round-trip works.
+  registry.register({
+    type: 'mechSpawn',
+    label: 'Mech Spawn',
+    category: 'Markers',
+    defaultScale: [1, 1, 1],
+    build: (scene, _physics, reg, props, shadowGenerator) => {
+      const meshes: BABYLON.AbstractMesh[] = [];
+      const facing = props.facing ?? 0;
+      const marker = BABYLON.MeshBuilder.CreateSphere(props.id, { diameter: 0.75, segments: 12 }, scene);
+      marker.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
+      marker.rotation.y = facing * Math.PI / 180;
+      marker.material = reg.getPlain('#9b6bff');
+      marker.receiveShadows = true;
+      shadowGenerator?.addShadowCaster(marker);
+      meshes.push(marker);
+      const nose = BABYLON.MeshBuilder.CreateBox(`${props.id}-facing`, {
+        width: 0.16, height: 0.16, depth: 0.75,
+      }, scene);
+      nose.position.set(0, 0, 0.5);
+      nose.parent = marker;
+      nose.material = reg.getPlain('#dcccff');
       meshes.push(nose);
       return {
         meshes,

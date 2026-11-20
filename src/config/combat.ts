@@ -162,6 +162,55 @@ export const COMBAT_CONFIG = {
   ENEMY_HEIGHT: 1.9,
 
   // ------------------------------------------------------------------
+  // The Sword Elite duel
+  // ------------------------------------------------------------------
+  /** Skinned Sword Elite model. It is already authored in metres. */
+  SWORD_ELITE_MODEL_URL: '/models/enemy_sword_elite.glb',
+  /** The Elite's own katana, parented to its weapon hand. */
+  SWORD_ELITE_KATANA_URL: '/models/enemy_sword_elite_katana.glb',
+  /** How close the player has to be before the Elite starts a duel. */
+  SWORD_ELITE_AGGRO_RANGE: 20,
+  /** How fast the Elite turns toward the player, in radians per second. */
+  SWORD_ELITE_TURN_SPEED: 4.5,
+
+  /** Length of the red telegraph before the dash, in seconds. */
+  SWORD_TELEGRAPH: 1.15,
+  /**
+   * How long before the blade lands the BLOCK cue opens, in seconds. This is
+   * measured during the dash, not the windup: the Elite commits to the rush
+   * and the player has to hit it just before contact. The combat system
+   * snapshots the window on the click frame, so the blade connecting later in
+   * the swing cannot make a correct input fail.
+   */
+  SWORD_PERFECT_WINDOW: 0.55,
+  /** The short launch clip at the start of the dash, in seconds. */
+  SWORD_DASH_STARTUP: 0.107,
+  /** How long the Elite keeps moving during the dash, in seconds. */
+  SWORD_DASH_DURATION: 0.7,
+  /** Dash speed, in metres per second. */
+  SWORD_DASH_SPEED: 16,
+  /** How close the blade has to get before the player dies, in metres. */
+  SWORD_STRIKE_RADIUS: 1.35,
+  /** How long a perfect hit keeps the Elite open to a follow-up, in seconds. */
+  SWORD_STUN_DURATION: 2.2,
+  /** How long the block pose lasts, in seconds. */
+  SWORD_BLOCK_DURATION: 0.5,
+  /** Recovery after a dash, a block or a stun, in seconds. */
+  SWORD_RECOVER_DURATION: 0.85,
+  /** Minimum wait before the next duel begins, in seconds. */
+  SWORD_ATTACK_COOLDOWN: 1.8,
+  /** The enemy katana is authored slightly oversized for readability. */
+  SWORD_KATANA_SCALE: 0.9,
+  /** Freeze on a perfect stun, in seconds. */
+  SWORD_STUN_HITSTOP: 0.045,
+  /** Freeze on a blocked hit, in seconds. */
+  SWORD_BLOCK_HITSTOP: 0.025,
+  /** Knockback speed when the Elite blocks a badly timed hit, in m/s. */
+  SWORD_BLOCK_KNOCKBACK: 9,
+  /** A small hop with the block shove so it clears the floor. */
+  SWORD_BLOCK_LIFT: 3.5,
+
+  // ------------------------------------------------------------------
   // Melee kills
   // ------------------------------------------------------------------
   /**
@@ -249,6 +298,104 @@ export const COMBAT_CONFIG = {
   SLICE_ARC_RADIUS: 1.6,
   /** How thick the slice arc is, in metres. */
   SLICE_ARC_THICKNESS: 0.07,
+
+  // ------------------------------------------------------------------
+  // Shuriken (Q)
+  // ------------------------------------------------------------------
+  /** Throwing-star model, extracted from Ghostrunner. */
+  SHURIKEN_MODEL_URL: '/models/shuriken.glb',
+  /** The extracted star is ~10cm across; scale it up so it reads in flight. */
+  SHURIKEN_MODEL_SCALE: 2.2,
+  /** One throw costs half the energy bar. */
+  SHURIKEN_COST: 0.5,
+  /** How fast the star flies, in metres per second. */
+  SHURIKEN_SPEED: 30,
+  /** How long a star lives before it disappears, in seconds. */
+  SHURIKEN_LIFETIME: 3,
+  /** Radius of the hit sphere around a target, in metres. */
+  SHURIKEN_HIT_RADIUS: 1.1,
+  /** How far the star may be from the crosshair and still acquire a target. */
+  SHURIKEN_HOMING_CONE_DOT: 0.45,
+  /** Maximum acquisition range, in metres. */
+  SHURIKEN_HOMING_RANGE: 26,
+  /** How hard the star bends toward its target, per second. */
+  SHURIKEN_HOMING_STRENGTH: 9,
+  /** Minimum time between throws, in seconds. */
+  SHURIKEN_COOLDOWN: 0.18,
+  /** Passive energy regen per second. */
+  SHURIKEN_REGEN_PASSIVE: 0.14,
+  /** Faster regen while an enemy is close and alert, per second. */
+  SHURIKEN_REGEN_COMBAT: 0.34,
+  /** How close an enemy has to be to count as "in combat", in metres. */
+  SHURIKEN_COMBAT_RANGE: 28,
+  /** Flat energy refund on a confirmed kill. */
+  SHURIKEN_KILL_REFILL: 0.25,
+  /** Extra energy per chained kill. */
+  SHURIKEN_COMBO_BONUS: 0.12,
+  /** Maximum combo bonus. */
+  SHURIKEN_COMBO_MAX: 0.5,
+  /** How long after a kill the combo stays alive, in seconds. */
+  SHURIKEN_COMBO_WINDOW: 3.2,
+
+  // ------------------------------------------------------------------
+  // SMG (UZI) enemy
+  // ------------------------------------------------------------------
+  SMG_MODEL_URL: '/models/enemy_smg.glb',
+  /** The SMG model is already authored in metres. */
+  SMG_MODEL_SCALE: 1,
+  /** How long the red telegraph is before emptying a magazine, in seconds. */
+  SMG_AIM_TIME: 0.5,
+  /** Time to aim again after a magazine plus the reload pause, in seconds. */
+  SMG_FIRE_INTERVAL: 0.9,
+  /** Rounds in a full magazine. */
+  SMG_BURST_COUNT: 15,
+  /** Time between rounds, in seconds. */
+  SMG_BURST_GAP: 0.105,
+  /** Reload pause after the magazine is empty, in seconds. */
+  SMG_RELOAD_TIME: 1.5,
+  /** How far the SMG can see and shoot, in metres. */
+  SMG_RANGE: 38,
+  /** How close before it turns to face the player, in metres. */
+  SMG_FACE_RANGE: 30,
+  /** Turn speed, in radians per second. */
+  SMG_TURN_SPEED: 6.2,
+  /** Muzzle offset in the enemy's local space, in metres. */
+  SMG_MUZZLE_OFFSET: { x: 0.26, y: 1.36, z: 0.44 },
+  /** Height of the enemy's centre, in metres. */
+  SMG_CENTER_HEIGHT: 1,
+  /** Height the aim laser starts at, in metres. */
+  SMG_EYE_HEIGHT: 1.55,
+
+  // ------------------------------------------------------------------
+  // Mech (Waver) enemy
+  // ------------------------------------------------------------------
+  MECH_MODEL_URL: '/models/enemy_mech.glb',
+  /** The mech GLB is already authored in metres. */
+  MECH_MODEL_SCALE: 1,
+  /** How close before the mech starts tracking the player, in metres. */
+  MECH_AGGRO_RANGE: 42,
+  /** Red head glow / laser buildup before a wave, in seconds. */
+  MECH_TELEGRAPH: 1.5,
+  /** Time between waves, in seconds. */
+  MECH_FIRE_INTERVAL: 3,
+  /** How fast the wave travels, in metres per second. */
+  MECH_WAVE_SPEED: 17,
+  /** Final half-width of the expanding wave wall, in metres. */
+  MECH_WAVE_RADIUS: 2.6,
+  /** Height of the wave wall, in metres. */
+  MECH_WAVE_HEIGHT: 3.4,
+  /** How long the wave stays alive, in seconds. */
+  MECH_WAVE_LIFETIME: 3.2,
+  /** How close the wave must pass to hurt the player, in metres. */
+  MECH_WAVE_HIT_RADIUS: 1.5,
+  /** Height of the mech's centre, in metres. */
+  MECH_CENTER_HEIGHT: 2.3,
+  /** Height the wave leaves the mech at, in metres. */
+  MECH_MUZZLE_HEIGHT: 2.6,
+  /** How long a shuriken stun lasts, in seconds. */
+  MECH_STUN_DURATION: 7,
+  /** How long the death animation plays, in seconds. */
+  MECH_DEATH_DURATION: 1.1,
 
   // ------------------------------------------------------------------
   // The instant reset

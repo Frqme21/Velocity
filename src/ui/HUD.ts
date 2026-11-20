@@ -3,6 +3,8 @@ export interface HUDState {
   fps: number;
   dashCharge: number;
   meter: number;
+  /** Shuriken energy, 0..1. One throw costs half of this bar. */
+  energy: number;
   speedEffect: number;
   dashing: boolean;
   sliding: boolean;
@@ -13,6 +15,7 @@ export class HUD {
   private speedElement: HTMLElement;
   private fpsElement: HTMLElement;
   private dashFillElement: SVGPathElement;
+  private energyFillElement: HTMLElement;
   private speedLinesElement: HTMLElement;
   private sensoryOverlayElement: HTMLElement;
   private damageFlashElement: HTMLElement;
@@ -22,6 +25,12 @@ export class HUD {
   private cinematicCaptionElement: HTMLElement;
   private fatalElement: HTMLElement;
   private completeElement: HTMLElement;
+  private completeTitleElement: HTMLElement;
+  private completeSubElement: HTMLElement;
+  private warningElement: HTMLElement;
+  private warningButton: HTMLButtonElement;
+  /** Called once, when the first-level warning is dismissed. */
+  private warningDismiss: (() => void) | null = null;
   /** The pending fade-out timers of the screen flashes. */
   private timers = new Map<'damage' | 'hit', number>();
 
@@ -39,6 +48,13 @@ export class HUD {
           <path id="dash-fill" d="M 14.68 42 A 20 20 0 0 0 49.32 42" pathLength="100"></path>
         </svg>
       </div>
+      <div id="shuriken-energy" aria-hidden="true">
+        <div id="shuriken-energy-track">
+          <div id="shuriken-energy-fill"></div>
+          <div id="shuriken-energy-split"></div>
+        </div>
+        <span id="shuriken-key">Q</span>
+      </div>
       <div id="movement-stats" aria-live="off">
         <span id="speed">0.00 m/s</span>
         <span id="fps">0 FPS</span>
@@ -46,17 +62,36 @@ export class HUD {
       <div id="cinematic-bars" aria-hidden="true"></div>
       <div id="cinematic-caption" aria-live="polite"></div>
       <div id="fatal-error" aria-live="assertive">
-        <div class="fatal-title">FATAL ERROR</div>
-        <div class="fatal-sub">PRESS <kbd>R</kbd> TO RESTART</div>
+        <div class="result-dialog fatal-dialog">
+          <span class="section-index">RUN TERMINATED</span>
+          <div class="fatal-title">FATAL ERROR</div>
+          <div class="fatal-sub">PRESS <kbd>R</kbd> TO RESTART</div>
+        </div>
       </div>
       <div id="level-complete" aria-live="assertive">
-        <div class="complete-title">LEVEL COMPLETE</div>
-        <div class="complete-sub">PRESS <kbd>R</kbd> TO RUN IT AGAIN</div>
+        <div class="result-dialog complete-dialog">
+          <span class="section-index">SECTOR CLEARED</span>
+          <div class="complete-title">LEVEL COMPLETE</div>
+          <div class="complete-sub">PRESS <kbd>R</kbd> TO RUN IT AGAIN</div>
+        </div>
+      </div>
+      <div id="ctrl-warning" aria-live="assertive">
+        <div class="warning-card">
+          <div class="warning-kicker">BEFORE YOU RUN</div>
+          <div class="warning-title">WATCH OUT FOR <kbd>CTRL</kbd> + <kbd>W</kbd></div>
+          <p class="warning-body">
+            Watch out for <kbd>CTRL</kbd> + <kbd>W</kbd> — it closes the tab.
+            <strong>Hold <kbd>W</kbd> first, then tap <kbd>CTRL</kbd>.</strong>
+          </p>
+          <button type="button" id="warning-continue">GOT IT — CLICK TO PLAY</button>
+          <div class="warning-foot">or press <kbd>ENTER</kbd> / <kbd>SPACE</kbd></div>
+        </div>
       </div>
     `;
     this.speedElement = root.querySelector<HTMLElement>('#speed')!;
     this.fpsElement = root.querySelector<HTMLElement>('#fps')!;
     this.dashFillElement = root.querySelector<SVGPathElement>('#dash-fill')!;
+    this.energyFillElement = root.querySelector<HTMLElement>('#shuriken-energy-fill')!;
     this.speedLinesElement = root.querySelector<HTMLElement>('#speed-lines')!;
     this.sensoryOverlayElement = root.querySelector<HTMLElement>('#sensory-overlay')!;
     this.damageFlashElement = root.querySelector<HTMLElement>('#damage-flash')!;
@@ -66,6 +101,34 @@ export class HUD {
     this.cinematicCaptionElement = root.querySelector<HTMLElement>('#cinematic-caption')!;
     this.fatalElement = root.querySelector<HTMLElement>('#fatal-error')!;
     this.completeElement = root.querySelector<HTMLElement>('#level-complete')!;
+    this.completeTitleElement = root.querySelector<HTMLElement>('.complete-title')!;
+    this.completeSubElement = root.querySelector<HTMLElement>('.complete-sub')!;
+    this.warningElement = root.querySelector<HTMLElement>('#ctrl-warning')!;
+    this.warningButton = root.querySelector<HTMLButtonElement>('#warning-continue')!;
+    this.warningButton.addEventListener('click', () => this.dismissControlWarning());
+  }
+
+  /** Show the first-level Ctrl+W tip and call back once when dismissed. */
+  showControlWarning(onDismiss: () => void) {
+    if (this.controlWarningActive) return;
+    this.warningDismiss = onDismiss;
+    document.body.classList.add('warning');
+    this.warningElement.classList.add('active');
+    this.warningButton.focus();
+  }
+
+  /** Dismiss the warning from the button, Enter or Space. */
+  dismissControlWarning() {
+    if (!this.controlWarningActive) return;
+    document.body.classList.remove('warning');
+    this.warningElement.classList.remove('active');
+    const dismiss = this.warningDismiss;
+    this.warningDismiss = null;
+    dismiss?.();
+  }
+
+  get controlWarningActive() {
+    return this.warningElement.classList.contains('active');
   }
 
   /** Enter or leave the scripted intro: letterbox, caption and hidden HUD. */
@@ -101,7 +164,12 @@ export class HUD {
   }
 
   /** Show the completion screen after the player enters a finish zone. */
-  showLevelComplete() {
+  showLevelComplete(
+    title = 'LEVEL COMPLETE',
+    sub = 'PRESS <kbd>R</kbd> TO RUN IT AGAIN',
+  ) {
+    this.completeTitleElement.textContent = title;
+    this.completeSubElement.innerHTML = sub;
     document.body.classList.add('complete');
     this.completeElement.classList.add('active');
   }
@@ -118,6 +186,9 @@ export class HUD {
     this.speedElement.textContent = `${state.speed.toFixed(2)} m/s`;
     this.fpsElement.textContent = `${Math.round(state.fps)} FPS`;
     this.dashFillElement.style.strokeDashoffset = `${(1 - meter) * 100}`;
+    const energy = Math.max(0, Math.min(1, state.energy));
+    this.energyFillElement.style.width = `${energy * 100}%`;
+    this.energyFillElement.classList.toggle('ready', energy >= 0.5);
 
     this.speedLinesElement.style.opacity = `${speedEffect * 0.85}`;
     this.speedLinesElement.style.setProperty('--speed-scale', `${0.85 + speedEffect * 0.45}`);

@@ -3,7 +3,7 @@ import { COMBAT_CONFIG } from '../config/combat';
 import type { FirstPersonController } from '../world/FirstPersonController';
 import type { KatanaViewmodel } from '../world/KatanaViewmodel';
 import type { ProjectileManager } from './ProjectileManager';
-import type { PistolEnemy } from '../entities/PistolEnemy';
+import type { MeleeEnemy, ShurikenHitResult } from '../entities/Enemy';
 import { SparkBurst } from './SparkBurst';
 import { SliceArc } from './SliceArc';
 
@@ -43,7 +43,18 @@ export class CombatSystem {
   private katana: KatanaViewmodel;
 
   /** The enemies this system watches. */
-  private enemies: PistolEnemy[] = [];
+  private enemies: MeleeEnemy[] = [];
+  /** Enemies already hit by the current swing, so one slash cannot stun then kill. */
+  private swingHits = new Set<MeleeEnemy>();
+  /**
+   * Enemies whose punish window was open when the button was pressed.
+   *
+   * The blade connects a few frames later. Deciding the outcome at impact
+   * made a correctly timed click fail if the window closed in between, so the
+   * click snapshots the timing and the impact only confirms the target is
+   * still there.
+   */
+  private swingPerfectTargets = new Set<MeleeEnemy>();
   /** Things that are not enemies but can still be cut. */
   private targets = new Set<SlashTarget>();
   /** The bursts of sparks that mark a kill. */
@@ -57,7 +68,15 @@ export class CombatSystem {
    * The game listens to this to freeze the world for a moment and to play
    * the sound of the kill.
    */
-  public onKill?: (point: BABYLON.Vector3, enemy: PistolEnemy) => void;
+  public onKill?: (point: BABYLON.Vector3, enemy: MeleeEnemy) => void;
+  /** Fired when a perfectly timed hit stuns a Sword Elite. */
+  public onPerfectStun?: (point: BABYLON.Vector3, enemy: MeleeEnemy) => void;
+  /** Fired when an out-of-time hit is blocked by a Sword Elite. */
+  public onBlocked?: (point: BABYLON.Vector3, enemy: MeleeEnemy) => void;
+  /** Fired when a shuriken stuns an enemy (the Mech's execution window). */
+  public onShurikenStun?: (point: BABYLON.Vector3, enemy: MeleeEnemy) => void;
+  /** Fired when a shuriken is blocked by an enemy's guard. */
+  public onShurikenBlock?: (point: BABYLON.Vector3, enemy: MeleeEnemy) => void;
 
   constructor(
     scene: BABYLON.Scene,
@@ -80,8 +99,63 @@ export class CombatSystem {
   // ------------------------------------------------------------------
 
   /** Add an enemy to the system. */
-  registerEnemy(enemy: PistolEnemy) {
+  registerEnemy(enemy: MeleeEnemy) {
     this.enemies.push(enemy);
+  }
+
+  /** Every registered enemy, so the shuriken can acquire a homing target. */
+  get trackedEnemies(): readonly MeleeEnemy[] {
+    return this.enemies;
+  }
+
+  /**
+   * Resolve a shuriken that reached an enemy.
+   *
+   * The shuriken system has already asked the enemy what the hit does; this
+   * method must not ask again, or a stateful response (like the Mech's one-time
+   * stun) would be consumed twice and the second call would look like a miss.
+   * Guards die through the normal kill path, the Mech opens its grapple window,
+   * and a Sword Elite's guard simply turns the star.
+   */
+  hitWithShuriken(
+    enemy: MeleeEnemy,
+    point: BABYLON.Vector3,
+    result: ShurikenHitResult,
+  ): ShurikenHitResult {
+    if (!enemy.isAlive) return 'ignore';
+    if (result === 'kill') {
+      this.kill(enemy);
+    } else if (result === 'stun') {
+      this.impact(point, new BABYLON.Color3(0.45, 0.95, 1), [
+        new BABYLON.Color3(0.35, 0.95, 1),
+        new BABYLON.Color3(1, 1, 1),
+      ]);
+      this.onShurikenStun?.(point, enemy);
+    } else if (result === 'block') {
+      this.impact(point, new BABYLON.Color3(1, 0.78, 0.35), [
+        new BABYLON.Color3(1, 0.45, 0.12),
+        new BABYLON.Color3(1, 0.9, 0.55),
+      ]);
+      this.onShurikenBlock?.(point, enemy);
+    }
+    return result;
+  }
+
+  /**
+   * Start a new katana swing.
+   *
+   * A Sword Elite stunned by the first lethal frame must stay stunned for the
+   * rest of that swing. The follow-up has to be a separate input, which is
+   * what makes the duel read as "perfect hit, then finish him".
+   */
+  beginSwing() {
+    this.swingHits.clear();
+    this.swingPerfectTargets.clear();
+    // Snapshot the duel timing now, on the input frame. The visual hit lands
+    // later in the swing, but the player aimed at the cue they saw.
+    for (const enemy of this.enemies) {
+      if (enemy.canBePerfectStunned) this.swingPerfectTargets.add(enemy);
+    }
   }
 
   /** The enemies this system watches. */
@@ -151,7 +225,7 @@ export class CombatSystem {
     const forward = this.camera.getForwardRay().direction;
 
     for (const enemy of this.enemies) {
-      if (!enemy.isAlive) continue;
+      if (!enemy.isAlive || this.swingHits.has(enemy)) continue;
 
       // The middle of the guard is what the blade has to reach - its feet
       // are far below the swing.
@@ -167,8 +241,59 @@ export class CombatSystem {
         }
       }
 
+      // Consume the hit before choosing an outcome: a stunned or a blocking
+      // enemy must not be processed again on the next lethal frame.
+      this.swingHits.add(enemy);
+      const point = enemy.center.clone();
+      const timedPerfect = this.swingPerfectTargets.has(enemy);
+
+      // Only the click-time snapshot can stun. If the window opens while the
+      // blade is already moving, that swing still bounces - the HUD did not
+      // tell the player to hit yet.
+      if (timedPerfect && enemy.consumePerfectHit?.(true)) {
+        this.impact(point, new BABYLON.Color3(0.55, 0.95, 1), [
+          new BABYLON.Color3(0.4, 0.95, 1),
+          new BABYLON.Color3(1, 1, 1),
+        ]);
+        this.onPerfectStun?.(point, enemy);
+        continue;
+      }
+
+      // `forced` keeps an early click from turning into a lucky stun when the
+      // window opens before impact. Stunned Elites still fall through to the
+      // normal kill below, which is the follow-up finisher.
+      if (enemy.consumeBlockedHit?.(!timedPerfect)) {
+        this.impact(point, new BABYLON.Color3(1, 0.78, 0.35), [
+          new BABYLON.Color3(1, 0.45, 0.12),
+          new BABYLON.Color3(1, 0.9, 0.55),
+        ]);
+        this.onBlocked?.(point, enemy);
+        continue;
+      }
+
       this.kill(enemy);
     }
+  }
+
+  /** A small non-lethal spark and slice for a stun or a block. */
+  private impact(point: BABYLON.Vector3, flash: BABYLON.Color3, shards: BABYLON.Color3[]) {
+    const forward = this.camera.getForwardRay().direction;
+    const up = BABYLON.Vector3.Cross(forward, BABYLON.Axis.X).normalize();
+    const right = BABYLON.Vector3.Cross(up, forward).normalize();
+    this.arcs.pop(point, right, up, {
+      color: flash,
+      radius: COMBAT_CONFIG.SLICE_ARC_RADIUS * 0.75,
+      thickness: COMBAT_CONFIG.SLICE_ARC_THICKNESS,
+      duration: COMBAT_CONFIG.SLICE_ARC_DURATION * 0.7,
+    });
+    this.sparks.burst(point, {
+      flashColor: flash,
+      shardColors: shards,
+      shardCount: 10,
+      speed: 5,
+      life: 0.3,
+      flashSize: 0.32,
+    });
   }
 
   /**
@@ -189,6 +314,18 @@ export class CombatSystem {
         const distance = BABYLON.Vector3.Distance(bolt.position, enemy.center);
         if (distance > COMBAT_CONFIG.DEFLECT_KILL_RADIUS) continue;
 
+        // A deflected bolt cannot cheese the duel: the Elite blocks it just
+        // like an out-of-time katana hit.
+        if (enemy.consumeBlockedHit?.()) {
+          const point = enemy.center.clone();
+          this.impact(point, new BABYLON.Color3(1, 0.78, 0.35), [
+            new BABYLON.Color3(1, 0.45, 0.12),
+            new BABYLON.Color3(1, 0.9, 0.55),
+          ]);
+          this.onBlocked?.(point, enemy);
+          continue;
+        }
+
         this.kill(enemy);
       }
     }
@@ -204,7 +341,7 @@ export class CombatSystem {
    * The dash meter goes straight back to full, so a kill can be chained
    * straight into a dash or an air-dash.
    */
-  private kill(enemy: PistolEnemy) {
+  private kill(enemy: MeleeEnemy) {
     if (!enemy.isAlive) return;
 
     const point = enemy.center.clone();
@@ -304,7 +441,7 @@ export class CombatSystem {
    * slice arc, feedback and dash refill as a real melee kill, but without
    * depending on where the camera happens to be pointing that frame.
    */
-  killEnemy(enemy: PistolEnemy) {
+  killEnemy(enemy: MeleeEnemy) {
     this.kill(enemy);
   }
 
@@ -320,6 +457,7 @@ export class CombatSystem {
   /** Remove every enemy and target. */
   clear() {
     this.enemies = [];
+    this.swingHits.clear();
     this.targets.clear();
     this.sparks.clear();
     this.arcs.clear();

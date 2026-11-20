@@ -1,6 +1,12 @@
 import * as BABYLON from '@babylonjs/core';
 import * as RAPIER from '@dimforge/rapier3d-compat';
-import { ComponentRegistry, buildDefaultRegistry, type LevelData, type ComponentProps } from '../components/registry';
+import {
+  ComponentRegistry,
+  EDITOR_ONLY_TYPES,
+  buildDefaultRegistry,
+  type LevelData,
+  type ComponentProps,
+} from '../components/registry';
 import { MaterialRegistry } from '../components/materials';
 import { type LaserWall } from './graybox';
 
@@ -16,6 +22,18 @@ export interface LoadedLevel {
   enemySpawns: BABYLON.Vector3[];
   /** Initial yaw (radians) for each enemy spawn, in the same order. */
   enemyFacings: number[];
+  /** Katana duelists placed with the Sword Elite Spawn marker. */
+  swordEliteSpawns: BABYLON.Vector3[];
+  /** Initial yaw (radians) for each Sword Elite spawn, in the same order. */
+  swordEliteFacings: number[];
+  /** UZI gunners placed with the SMG Spawn marker. */
+  smgSpawns: BABYLON.Vector3[];
+  /** Initial yaw (radians) for each SMG spawn, in the same order. */
+  smgFacings: number[];
+  /** Mech robots placed with the Mech Spawn marker. */
+  mechSpawns: BABYLON.Vector3[];
+  /** Initial yaw (radians) for each Mech spawn, in the same order. */
+  mechFacings: number[];
   /** Initial yaw (radians) for the player spawn marker. */
   playerFacing: number;
   /** Finish zones; entering one completes the level. */
@@ -56,6 +74,11 @@ export function loadLevel(
   const registry = buildDefaultRegistry();
   const materials = new MaterialRegistry(scene);
 
+  // Collider wireframes are a debugging aid, never part of the shipped level.
+  // Add ?debugColliders to the URL when you actually want to see them.
+  const showColliderDebug = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).has('debugColliders');
+
   const meshes: BABYLON.AbstractMesh[] = [];
   const bodies: RAPIER.RigidBody[] = [];
   const debugMeshes: BABYLON.Mesh[] = [];
@@ -63,6 +86,12 @@ export function loadLevel(
   const grappleAnchors: { position: BABYLON.Vector3; landing: BABYLON.Vector3 }[] = [];
   const enemySpawns: BABYLON.Vector3[] = [];
   const enemyFacings: number[] = [];
+  const swordEliteSpawns: BABYLON.Vector3[] = [];
+  const swordEliteFacings: number[] = [];
+  const smgSpawns: BABYLON.Vector3[] = [];
+  const smgFacings: number[] = [];
+  const mechSpawns: BABYLON.Vector3[] = [];
+  const mechFacings: number[] = [];
   let playerFacing = 0;
   const wallRunColliders: number[] = [];
   const mantleColliders: number[] = [];
@@ -74,12 +103,32 @@ export function loadLevel(
   const gameplaySpawn = new BABYLON.Vector3(gs[0], Math.max(gs[1], 0.92), gs[2]);
   let playerMarker: BABYLON.Vector3 | null = null;
 
+  /**
+   * Enemy spawn markers have no physics body, so a marker left in mid-air
+   * used to leave the guard floating there forever. Drop each spawn onto the
+   * closest surface below it once all the level colliders exist.
+   */
+  const snapSpawnToFloor = (point: BABYLON.Vector3) => {
+    const origin = point.add(new BABYLON.Vector3(0, 1, 0));
+    const ray = new RAPIER.Ray(origin, new BABYLON.Vector3(0, -1, 0));
+    const hit = physics.castRay(ray, 100, true);
+    if (hit) point.y = origin.y - hit.timeOfImpact + 0.02;
+  };
+
   // --- Components -----------------------------------------------------------
   for (const props of data.components) {
     const result = registry.build(scene, physics, materials, props, shadowGenerator);
+    const editorOnly = EDITOR_ONLY_TYPES.has(props.type);
     for (const mesh of result.meshes) {
       meshes.push(mesh);
-      shadowGenerator?.addShadowCaster(mesh);
+      if (editorOnly) {
+        // Keep the data the marker produced (spawn point, finish zone) but
+        // never let the editor's helper geometry into the game world.
+        mesh.setEnabled(false);
+        mesh.isPickable = false;
+      } else {
+        shadowGenerator?.addShadowCaster(mesh);
+      }
     }
     if (result.body) {
       bodies.push(result.body);
@@ -94,28 +143,30 @@ export function loadLevel(
       const pos = result.body.translation();
       console.log(`[loadLevel] collider: ${props.id} type=${props.type} pos=(${pos.x.toFixed(2)},${pos.y.toFixed(2)},${pos.z.toFixed(2)}) scale=[${props.scale.join(',')}] collide=${props.collide}`);
       // Debug wireframe: show the ACTUAL collider bounds in lime green.
-      // Use the collider's own half-extents when available so the box matches
-      // the hitbox exactly (plates and ramps have custom thicknesses).
-      let hx = props.scale[0] / 2;
-      let hy = props.scale[1] / 2;
-      let hz = props.scale[2] / 2;
-      try {
-        const he = result.collider?.halfExtents();
-        if (he) { hx = he.x; hy = he.y; hz = he.z; }
-      } catch { /* fall back to props */ }
-      const dbg = BABYLON.MeshBuilder.CreateBox(`dbg-${props.id}`, {
-        width: hx * 2, height: hy * 2, depth: hz * 2,
-      }, scene);
-      dbg.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
-      dbg.rotation.copyFrom(new BABYLON.Vector3(props.rotation[0], props.rotation[1], props.rotation[2]));
-      const dbgMat = new BABYLON.StandardMaterial(`dbg-mat-${props.id}`, scene);
-      dbgMat.emissiveColor = props.wallRun
-        ? new BABYLON.Color3(0.2, 0.85, 1)
-        : new BABYLON.Color3(0, 1, 0);
-      dbgMat.wireframe = true;
-      dbgMat.disableLighting = true;
-      dbg.material = dbgMat;
-      debugMeshes.push(dbg);
+      // Only built for ?debugColliders - in a normal run these boxes used to
+      // cover the whole level in green wireframe.
+      if (showColliderDebug) {
+        let hx = props.scale[0] / 2;
+        let hy = props.scale[1] / 2;
+        let hz = props.scale[2] / 2;
+        try {
+          const he = result.collider?.halfExtents();
+          if (he) { hx = he.x; hy = he.y; hz = he.z; }
+        } catch { /* fall back to props */ }
+        const dbg = BABYLON.MeshBuilder.CreateBox(`dbg-${props.id}`, {
+          width: hx * 2, height: hy * 2, depth: hz * 2,
+        }, scene);
+        dbg.position.copyFrom(new BABYLON.Vector3(props.position[0], props.position[1], props.position[2]));
+        dbg.rotation.copyFrom(new BABYLON.Vector3(props.rotation[0], props.rotation[1], props.rotation[2]));
+        const dbgMat = new BABYLON.StandardMaterial(`dbg-mat-${props.id}`, scene);
+        dbgMat.emissiveColor = props.wallRun
+          ? new BABYLON.Color3(0.2, 0.85, 1)
+          : new BABYLON.Color3(0, 1, 0);
+        dbgMat.wireframe = true;
+        dbgMat.disableLighting = true;
+        dbg.material = dbgMat;
+        debugMeshes.push(dbg);
+      }
     }
     if (result.anchor) grappleAnchors.push(result.anchor);
     if (result.finish) finishZones.push(result.finish);
@@ -140,6 +191,18 @@ export function loadLevel(
       enemySpawns.push(result.spawn);
       enemyFacings.push(((props.facing ?? 0) * Math.PI) / 180);
     }
+    if (result.spawn && props.type === 'swordEliteSpawn') {
+      swordEliteSpawns.push(result.spawn);
+      swordEliteFacings.push(((props.facing ?? 0) * Math.PI) / 180);
+    }
+    if (result.spawn && props.type === 'smgSpawn') {
+      smgSpawns.push(result.spawn);
+      smgFacings.push(((props.facing ?? 0) * Math.PI) / 180);
+    }
+    if (result.spawn && props.type === 'mechSpawn') {
+      mechSpawns.push(result.spawn);
+      mechFacings.push(((props.facing ?? 0) * Math.PI) / 180);
+    }
     if (result.spawn && props.type === 'playerSpawn') {
       playerMarker = new BABYLON.Vector3(
         result.spawn.x,
@@ -150,6 +213,11 @@ export function loadLevel(
     }
     if (result.light) lights.push(result.light);
   }
+  // All static colliders now exist, so the spawn markers can be grounded.
+  for (const point of [...enemySpawns, ...swordEliteSpawns, ...smgSpawns, ...mechSpawns]) {
+    snapSpawnToFloor(point);
+  }
+
   if (playerMarker) {
     gameplaySpawn.copyFrom(playerMarker);
     spawn.copyFrom(playerMarker);
@@ -200,6 +268,12 @@ export function loadLevel(
     grappleAnchors,
     enemySpawns,
     enemyFacings,
+    swordEliteSpawns,
+    swordEliteFacings,
+    smgSpawns,
+    smgFacings,
+    mechSpawns,
+    mechFacings,
     playerFacing,
     finishZones,
     laserWalls,

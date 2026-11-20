@@ -3,6 +3,7 @@ import * as RAPIER from '@dimforge/rapier3d-compat';
 import '@babylonjs/loaders/glTF';
 import { COMBAT_CONFIG } from '../config/combat';
 import type { ProjectileManager } from '../combat/ProjectileManager';
+import type { ShurikenHitResult } from './Enemy';
 
 /**
  * The loaded enemy model, shared by every enemy in the level.
@@ -299,6 +300,16 @@ export class PistolEnemy {
   /** How many enemies are left standing. */
   get isDead(): boolean {
     return !this.alive;
+  }
+
+  /** Pistol guards are one-hit shuriken kills. */
+  get canBeShurikenTargeted(): boolean {
+    return this.alive;
+  }
+
+  takeShurikenHit(): ShurikenHitResult {
+    if (!this.alive) return 'ignore';
+    return 'kill';
   }
 
   // ------------------------------------------------------------------

@@ -1,7 +1,15 @@
 import * as BABYLON from '@babylonjs/core';
 
 /** Identifiers for the clips the game can play. */
-export type SfxId = 'katana-swing' | 'katana-slash' | 'parry' | 'enemy-shot';
+export type SfxId =
+  | 'katana-swing'
+  | 'katana-slash'
+  | 'parry'
+  | 'enemy-shot'
+  | 'sword-block'
+  | 'sword-strike'
+  | 'shuriken-throw'
+  | 'mech-wave';
 
 interface ClipDefinition {
   url: string;
@@ -31,6 +39,29 @@ const CLIPS: Record<SfxId, ClipDefinition> = {
   },
   // The pistol of a guard. Several can fire at once, so it gets voices.
   'enemy-shot': { url: '/sounds/enemy_shot.wav', volume: 0.5, voices: 4 },
+  // A katana hitting another katana: a harder clang than a bolt parry.
+  'sword-block': {
+    url: '/sounds/parry.wav',
+    volume: 1,
+    voices: 2,
+    fallback: () => playMetallicPing(0.7),
+  },
+  // The Elite's own slash as its dash connects.
+  'sword-strike': { url: '/sounds/katana_slash.wav', volume: 0.85, voices: 2 },
+  // The spin of a thrown star: a bright, short metallic sweep.
+  'shuriken-throw': {
+    url: '/sounds/katana_swing.wav',
+    volume: 0.55,
+    voices: 3,
+    fallback: () => playMetallicPing(1.4),
+  },
+  // The Mech's wave launching: a heavier, lower metallic hit.
+  'mech-wave': {
+    url: '/sounds/katana_slash.wav',
+    volume: 0.6,
+    voices: 2,
+    fallback: () => playMetallicPing(0.45),
+  },
 };
 
 interface Clip {

@@ -15,6 +15,7 @@ import { PositionGizmo } from '@babylonjs/core/Gizmos/positionGizmo';
 import { RotationGizmo } from '@babylonjs/core/Gizmos/rotationGizmo';
 import { ScaleGizmo } from '@babylonjs/core/Gizmos/scaleGizmo';
 import { UtilityLayerRenderer } from '@babylonjs/core/Rendering/utilityLayerRenderer';
+import { initTheme } from '../ui/theme';
 
 interface Instance {
   id: string;
@@ -35,6 +36,11 @@ interface Instance {
 function meshScale(mesh: BABYLON.AbstractMesh): [number, number, number] {
   return [mesh.scaling.x, mesh.scaling.y, mesh.scaling.z];
 }
+
+/** Markers whose nose points where the spawned character will face. */
+const SPAWN_TYPES = new Set<ComponentType>([
+  'playerSpawn', 'enemySpawn', 'smgSpawn', 'mechSpawn', 'swordEliteSpawn',
+]);
 
 export class Editor {
   private canvas: HTMLCanvasElement;
@@ -107,6 +113,7 @@ export class Editor {
     this.elGizmoScale = document.getElementById('btn-gizmo-scale') as HTMLButtonElement;
     this.registry = buildDefaultRegistry();
 
+    initTheme();
     this.bindUI();
     this.buildPalette();
     this.init().catch((err) => {
@@ -120,6 +127,14 @@ export class Editor {
   }
 
   private bindUI() {
+    // The tactical rail is a set of shortcuts: each button forwards to the
+    // original toolbar button, so there is only one handler per action.
+    document.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach((button) => {
+      button.addEventListener('click', () => {
+        document.getElementById(button.dataset.tool ?? '')?.click();
+      });
+    });
+
     document.getElementById('btn-new')!.addEventListener('click', () => this.newLevel());
     document.getElementById('btn-save')!.addEventListener('click', () => this.saveLevel());
     document.getElementById('btn-load')!.addEventListener('click', () => this.loadLevel());
@@ -590,6 +605,16 @@ export class Editor {
         btn.classList.remove('active');
       }
     });
+
+    // Keep the rail shortcuts in sync with the toolbar gizmo chips.
+    const railModes: Record<string, 'translate' | 'rotate' | 'scale'> = {
+      'btn-gizmo-move': 'translate',
+      'btn-gizmo-rotate': 'rotate',
+      'btn-gizmo-scale': 'scale',
+    };
+    document.querySelectorAll<HTMLElement>('.editor-rail [data-tool]').forEach((btn) => {
+      btn.classList.toggle('active', railModes[btn.dataset.tool ?? ''] === this.gizmoMode);
+    });
   }
 
   /** Attach/detach the gizmo to the currently selected instance. */
@@ -637,6 +662,8 @@ export class Editor {
     };
     // The wall-run panel is a parkour surface by default.
     if (type === 'wallrun_panel') props.wallRun = true;
+    // Spawn markers always carry an explicit facing so export/load is 1:1.
+    if (SPAWN_TYPES.has(type)) props.facing = 0;
     // A text billboard is signage: no collider, with starter text so it isn't
     // blank the moment it is dropped into the scene.
     if (type === 'textBillboard') {
@@ -753,7 +780,7 @@ export class Editor {
     const rotation = this.meshRotation(m);
     target.props.position = [m.position.x, m.position.y, m.position.z];
     target.props.rotation = rotation;
-    if (target.type === 'playerSpawn' || target.type === 'enemySpawn') {
+    if (SPAWN_TYPES.has(target.type)) {
       target.props.facing = Math.round((rotation[1] * 180 / Math.PI) * 10) / 10;
     }
     // Moving/rotating must never change size. Only the scale gizmo folds its
@@ -992,7 +1019,7 @@ export class Editor {
     }
 
     // --- Spawn facing ------------------------------------------------------
-    if (i.type === 'playerSpawn' || i.type === 'enemySpawn') {
+    if (SPAWN_TYPES.has(i.type)) {
       this.elInspector.appendChild(this.h3('Spawn Facing'));
       const faceField = document.createElement('div');
       faceField.className = 'field';

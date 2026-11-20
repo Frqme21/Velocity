@@ -1,0 +1,510 @@
+{
+  "name": "level3",
+  "spawn": [
+    0,
+    0.92,
+    -8
+  ],
+  "gameplaySpawn": [
+    0,
+    0.92,
+    -8
+  ],
+  "killY": -6,
+  "components": [
+    {
+      "id": "concrete_floor-2",
+      "type": "concrete_floor",
+      "position": [
+        0,
+        -0.2,
+        -10
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        16,
+        0.4,
+        16
+      ],
+      "collide": true
+    },
+    {
+      "id": "grappleAnchor-1",
+      "type": "grappleAnchor",
+      "position": [
+        0,
+        9.21060848236084,
+        4.473291873931885
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collide": true
+    },
+    {
+      "id": "floor-2",
+      "type": "floor",
+      "position": [
+        0,
+        -0.2,
+        -10
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        16,
+        0.4,
+        16
+      ],
+      "collide": true
+    },
+    {
+      "id": "floor-3",
+      "type": "floor",
+      "position": [
+        8.898835182189941,
+        7.692101955413818,
+        11.865337371826172
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        28.82713508605957,
+        0.4,
+        16
+      ],
+      "collide": true
+    },
+    {
+      "id": "wall-1",
+      "type": "wall",
+      "position": [
+        -5.914725303649902,
+        22.063934326171875,
+        37.808189392089844
+      ],
+      "rotation": [
+        0,
+        -1.5610062710296622,
+        0
+      ],
+      "scale": [
+        51.241877468780274,
+        28.099170684814453,
+        0.39999988081548166
+      ],
+      "collide": true,
+      "material": "window_lit"
+    },
+    {
+      "id": "floor-4",
+      "type": "floor",
+      "position": [
+        14.393799585345405,
+        7.692101955413818,
+        69.789886692611
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        37.06128692626953,
+        0.4,
+        31.793081283569336
+      ],
+      "collide": true
+    },
+    {
+      "id": "enemySpawn-1",
+      "type": "enemySpawn",
+      "position": [
+        13.762659072875977,
+        7.657128810882568,
+        68.87684631347656
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collide": true,
+      "facing": 180
+    },
+    {
+      "id": "wall-2",
+      "type": "wall",
+      "position": [
+        13.591257095336914,
+        12.073168754577637,
+        85.1930160522461
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        12.252250671386719,
+        6.451707363128662,
+        0.4
+      ],
+      "collide": true
+    },
+    {
+      "id": "wall-3",
+      "type": "wall",
+      "position": [
+        0.7001928091049194,
+        14.5704927444458,
+        86.70934295654297
+      ],
+      "rotation": [
+        0,
+        -0.459090269768025,
+        0
+      ],
+      "scale": [
+        8,
+        4,
+        0.4
+      ],
+      "collide": true
+    },
+    {
+      "id": "wall-4",
+      "type": "wall",
+      "position": [
+        -3.5936543941497803,
+        17.595314025878906,
+        78.50128936767578
+      ],
+      "rotation": [
+        0,
+        -1.5251139337700161,
+        0
+      ],
+      "scale": [
+        8,
+        4,
+        0.4
+      ],
+      "collide": true
+    },
+    {
+      "id": "floor-5",
+      "type": "floor",
+      "position": [
+        6.226735591888428,
+        31.432950973510742,
+        3.646029233932495
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        31.55533218383789,
+        0.4,
+        16
+      ],
+      "collide": true
+    },
+    {
+      "id": "playerSpawn-1",
+      "type": "playerSpawn",
+      "position": [
+        0,
+        0.92,
+        -8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collide": true
+    },
+    {
+      "id": "enemySpawn-2",
+      "type": "enemySpawn",
+      "position": [
+        9.096200942993164,
+        31.153789520263672,
+        2.621852397918701
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collide": true
+    },
+    {
+      "id": "enemySpawn-3",
+      "type": "enemySpawn",
+      "position": [
+        -37.691741943359375,
+        31.176374435424805,
+        -29.89869499206543
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collide": true
+    },
+    {
+      "id": "enemySpawn-4",
+      "type": "enemySpawn",
+      "position": [
+        -2.522017002105713,
+        31.297571182250977,
+        3.5098516941070557
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collide": true
+    },
+    {
+      "id": "wall-5",
+      "type": "wall",
+      "position": [
+        23.471521377563477,
+        34.06050491333008,
+        -12.359842300415039
+      ],
+      "rotation": [
+        0,
+        1.5894745511526711,
+        0
+      ],
+      "scale": [
+        8,
+        4,
+        0.4
+      ],
+      "collide": true
+    },
+    {
+      "id": "floor-6",
+      "type": "floor",
+      "position": [
+        -5.799533843994141,
+        31.231830596923828,
+        -28.594362258911133
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        65.81623641744045,
+        0.4,
+        16
+      ],
+      "collide": true
+    },
+    {
+      "id": "floor-7",
+      "type": "floor",
+      "position": [
+        -70.97836877784604,
+        31.231830596923828,
+        -31.564638589449515
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        32.698539482751585,
+        0.4,
+        16
+      ],
+      "collide": true
+    },
+    {
+      "id": "levelEnd-1",
+      "type": "levelEnd",
+      "position": [
+        -71.3282699584961,
+        31.54450225830078,
+        -31.441600799560547
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        16.191182613372803,
+        3,
+        8.21501898765564
+      ],
+      "collide": true
+    },
+    {
+      "id": "textBillboard-1",
+      "type": "textBillboard",
+      "position": [
+        -1.7254791259765625,
+        2.261904716491699,
+        0.3708115220069885
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        6,
+        2,
+        1
+      ],
+      "collide": false,
+      "text": "Ind here. u need to util a technique called \"wall climibing\" "
+    },
+    {
+      "id": "textBillboard-2",
+      "type": "textBillboard",
+      "position": [
+        -1.8129507303237915,
+        1.4246207475662231,
+        0.0061021470464766026
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        6,
+        2,
+        1
+      ],
+      "collide": false,
+      "text": "and. wall sensoring"
+    },
+    {
+      "id": "textBillboard-3",
+      "type": "textBillboard",
+      "position": [
+        5.873745918273926,
+        11.067915916442871,
+        19.415653228759766
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        6,
+        2,
+        1
+      ],
+      "collide": false,
+      "text": "To do that u will need to wall run. then jump away from wall.\nTdhen use a shift dash to boost back into it a bit higher.\nThen just spam these until u get to the appropriate height."
+    },
+    {
+      "id": "textBillboard-6",
+      "type": "textBillboard",
+      "position": [
+        15.964692115783691,
+        13.173008918762207,
+        79.25189208984375
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        6,
+        2,
+        1
+      ],
+      "collide": false,
+      "text": "Good.\nNow do the same here\njust from this wall behind me\nuse a dash that u hold in the air\ntoo boost into that other wall to the left.\nThen the same thing to get to the other 2 walls"
+    },
+    {
+      "id": "textBillboard-5",
+      "type": "textBillboard",
+      "position": [
+        19.48494529724121,
+        32.66054916381836,
+        -23.691871643066406
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        6,
+        2,
+        1
+      ],
+      "collide": false,
+      "text": "You can dodge bullets\n(or for extra style points)\naim at the enemy and time your hit to\ndeflect the bullet onto them"
+    }
+  ],
+  "grappleAnchors": [],
+  "enemySpawns": [],
+  "lights": [],
+  "parkour": {
+    "wallRunStrict": false,
+    "mantleStrict": false
+  }
+}
