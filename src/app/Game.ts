@@ -173,6 +173,10 @@ export class Game {
     this.camera.inputs.clear();
     this.camera.rotationQuaternion = null;
     this.camera.upVector.set(0, 1, 0);
+    // The controller writes Euler rotation every frame. Without this flag,
+    // Babylon keeps upVector latched until roll changes, which leaves the
+    // view skewed after the intro's long zero-roll hold.
+    this.camera.updateUpVectorFromRotation = true;
     this.scene.activeCamera = this.camera;
 
     // level1 is the hand-authored opening course (the placeholder JSON is

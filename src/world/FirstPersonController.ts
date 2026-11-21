@@ -1904,6 +1904,13 @@ export class FirstPersonController {
     this.spawnPoint.copyFrom(point);
   }
 
+  /** Restore the camera to a clean Euler state owned by the controller. */
+  private resetCameraState() {
+    this.camera.rotationQuaternion = null;
+    this.camera.upVector.set(0, 1, 0);
+    this.camera.updateUpVectorFromRotation = true;
+  }
+
   /** Teleport to an exact body position and look direction without a reset. */
   setPose(position: BABYLON.Vector3, yaw = 0, pitch = 0) {
     if (this.grappleTarget) this.endGrapplePull('cancelled', false);
@@ -1911,6 +1918,13 @@ export class FirstPersonController {
     this.endSlide(false);
     this.cancelSensoryBoost();
     this.mantle.active = false;
+
+    this.slideElapsed = 0;
+    this.slideDirectionX = 0;
+    this.slideDirectionZ = 0;
+    this.slideCooldown = 0;
+    this.slideHeldConsumed = false;
+    this.slideRequestBuffered = false;
 
     this.velX = 0;
     this.velZ = 0;
@@ -1924,6 +1938,14 @@ export class FirstPersonController {
     this.lungeTimer = 0;
     this.wallRunTime = 0;
     this.jumpGraceTimer = 0;
+    this.grappleFov = 0;
+    this.grappleShake = 0;
+    this.grappleSpeedBoost = 1;
+    this.grappleLift = 0;
+    this.grappleKickCooldown = 0;
+    this.grappleElapsed = 0;
+    this.grappleEntrySpeed = 0;
+    this.grappleDistance = 0;
     this.cameraRoll = 0;
     this.slideCameraRoll = 0;
     this.grappleRoll = 0;
@@ -1935,6 +1957,7 @@ export class FirstPersonController {
     this.pitch = pitch;
     this.grounded = false;
     this.airTime = 0;
+    this.resetCameraState();
     this.body.setNextKinematicTranslation(position);
     this.body.setTranslation(position, true);
     this.syncCamera(position.x, position.y, position.z);
@@ -1958,8 +1981,20 @@ export class FirstPersonController {
     this.cameraRoll = 0;
     this.slideCameraRoll = 0;
     this.grappleRoll = 0;
+    this.grappleFov = 0;
+    this.grappleShake = 0;
+    this.sliding = false;
+    this.slideElapsed = 0;
+    this.slideDirectionX = 0;
+    this.slideDirectionZ = 0;
+    this.slideCooldown = 0;
+    this.slideHeldConsumed = false;
+    this.slideRequestBuffered = false;
+    this.eyeOffset = MOVEMENT.EYE_OFFSET;
     this.cameraFov = cinematicFov;
     this.camera.fov = cinematicFov;
+    this.resetCameraState();
+    this.syncCamera(this.position.x, this.position.y, this.position.z);
   }
 
   get isWallRunning(): boolean {

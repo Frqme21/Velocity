@@ -260,10 +260,11 @@ export class IntroCinematic {
     const finalFov = (finalKey.fov * Math.PI) / 180;
     this.deps.controller.prepareHandover(finalFov);
 
-    // Force Babylon to rebuild its cached view target from the handover pose.
-    // Direct camera rotation writes during the shot leave that cache pointing
-    // at the last cinematic frame, which keeps the view skewed until a later
-    // action, such as the first slide, writes a fresh target.
+    // Force Babylon to rebuild the full view basis from the handover pose.
+    // TargetCamera keeps an Euler-derived upVector latched while roll is
+    // unchanged, so the long zero-roll hold after the dive can leave it
+    // pointing along the old pitch. A slide used to refresh it by changing
+    // roll; the controller now marks rotation as authoritative instead.
     this.deps.camera.rotationQuaternion = null;
     this.deps.camera.getViewMatrix(true);
 
