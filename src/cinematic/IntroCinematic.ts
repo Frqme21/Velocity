@@ -135,6 +135,7 @@ export class IntroCinematic {
 
   /** Jump straight to the playable part, e.g. when Space is pressed. */
   skip() {
+    // Space and natural completion must take the same handoff path.
     if (this.activeFlag) this.finish();
   }
 
@@ -152,7 +153,10 @@ export class IntroCinematic {
       this.eventIndex++;
     }
 
-    if (this.elapsed >= END_TIME) this.finish();
+    if (this.elapsed >= END_TIME) {
+      // Natural completion uses the same reset and handoff as Space skip.
+      this.finish();
+    }
   }
 
   /** Apply the whole shot at a single point in time. */
@@ -230,7 +234,6 @@ export class IntroCinematic {
     this.deps.hud.setCinematic(false);
     this.deps.hud.setCinematicCaption('');
 
-    this.deps.input.enabled = true;
     for (const enemy of this.deps.enemies) enemy.aiEnabled = true;
 
     // The body teleports to the courtyard; the player keeps looking down the
@@ -256,6 +259,16 @@ export class IntroCinematic {
     // handover FOV is correct even when skipping.
     const finalFov = (finalKey.fov * Math.PI) / 180;
     this.deps.controller.prepareHandover(finalFov);
+
+    // Force Babylon to rebuild its cached view target from the handover pose.
+    // Direct camera rotation writes during the shot leave that cache pointing
+    // at the last cinematic frame, which keeps the view skewed until a later
+    // action, such as the first slide, writes a fresh target.
+    this.deps.camera.rotationQuaternion = null;
+    this.deps.camera.getViewMatrix(true);
+
+    // Only accept gameplay input after the camera state is committed.
+    this.deps.input.enabled = true;
 
     this.deps.onFinish();
   }
