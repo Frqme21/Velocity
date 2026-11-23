@@ -14,6 +14,12 @@ export interface SmgModelSource {
 /** How long the death animation takes, in seconds. */
 const DEATH_DURATION = 0.55;
 
+/** A bone's driver node and the rotation the GLB exported it with. */
+interface SmgBonePose {
+  node: BABYLON.TransformNode;
+  rest: BABYLON.Quaternion;
+}
+
 /**
  * A Ghostrunner UZI gunner.
  *
@@ -35,9 +41,8 @@ export class SmgEnemy implements MeleeEnemy {
   private root: BABYLON.TransformNode;
   private meshes: BABYLON.AbstractMesh[] = [];
 
-  /** The gunner's skeleton, posed in code because the GLB has no clips. */
-  private bones = new Map<string, BABYLON.Bone>();
-  private baseRotations = new Map<BABYLON.Bone, BABYLON.Vector3>();
+  /** The gunner's bone driver nodes, posed in code because the GLB has no clips. */
+  private poses = new Map<string, SmgBonePose>();
   private animTime = 0;
   private recoil = 0;
   private aimBlend = 0;
@@ -147,39 +152,49 @@ export class SmgEnemy implements MeleeEnemy {
     }
 
     // The UZI shares the pistol skeleton, so the GLB has a full rig even
-    // though it has no baked animation clips. Keep the rest pose and pose the
-    // bones every frame instead.
-    const skeleton = entries.skeletons[0] ?? null;
-    if (skeleton) {
+    // though it has no baked animation clips. glTF drives those bones through
+    // TransformNodes, so the procedural animation has to write the linked
+    // nodes. Writing Bone.rotation only changes a temporary Euler vector and
+    // leaves the skinned mesh in its bind pose.
+    for (const skeleton of entries.skeletons) {
       skeleton.useTextureToStoreBoneMatrices = true;
       for (const bone of skeleton.bones) {
-        this.baseRotations.set(bone, bone.rotation.clone());
-        this.bones.set(bone.name, bone);
-        this.bones.set(`${bone.name}-smg-${index}`, bone);
+        const node = bone.getTransformNode();
+        if (!node) continue;
+        const rest = node.rotationQuaternion
+          ? node.rotationQuaternion.clone()
+          : BABYLON.Quaternion.RotationYawPitchRoll(node.rotation.y, node.rotation.x, node.rotation.z);
+        const entry: SmgBonePose = { node, rest };
+        this.poses.set(bone.name, entry);
+        this.poses.set(`${bone.name}-smg-${index}`, entry);
       }
     }
 
     this.root.scaling.setAll(COMBAT_CONFIG.SMG_MODEL_SCALE);
+    this.restoreBones();
   }
 
-  private bone(name: string): BABYLON.Bone | null {
-    return this.bones.get(name) ?? this.bones.get(`${name}-smg-${this.index}`) ?? null;
+  private bone(name: string): SmgBonePose | null {
+    return this.poses.get(name) ?? this.poses.get(`${name}-smg-${this.index}`) ?? null;
   }
 
-  /** Restore every bone to the exact pose the GLB was exported with. */
+  /** Restore every bone driver to the exact pose the GLB was exported with. */
   private restoreBones() {
-    for (const [bone, rotation] of this.baseRotations) {
-      bone.rotation.copyFrom(rotation);
+    for (const entry of new Set(this.poses.values())) {
+      if (!entry.node.rotationQuaternion) {
+        entry.node.rotationQuaternion = entry.rest.clone();
+        continue;
+      }
+      entry.node.rotationQuaternion.copyFrom(entry.rest);
     }
   }
 
-  /** Add a local-space offset to one bone's exported rest rotation. */
+  /** Add a local-space Euler offset to one bone's exported rest rotation. */
   private pose(name: string, x: number, y: number, z: number) {
-    const bone = this.bone(name);
-    if (!bone) return;
-    const base = this.baseRotations.get(bone);
-    if (!base) return;
-    bone.rotation.copyFromFloats(base.x + x, base.y + y, base.z + z);
+    const entry = this.bone(name);
+    if (!entry) return;
+    const offset = BABYLON.Quaternion.RotationYawPitchRoll(y, x, z);
+    entry.node.rotationQuaternion = entry.rest.multiply(offset);
   }
 
   /**
