@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import * as RAPIER from '@dimforge/rapier3d-compat';
-import { InputManager } from '../input/InputManager';
+import { EMPTY_INPUT, InputManager, type InputState } from '../input/InputManager';
 import { MOVEMENT_CONFIG } from '../config/movement';
 import { GRAPPLE_CONFIG } from '../config/grapple';
 import { COMBAT_CONFIG } from '../config/combat';
@@ -183,6 +183,9 @@ export class FirstPersonController {
   private eyeOffset: number = MOVEMENT.EYE_OFFSET;
   private slideCameraRoll = 0;
   private cameraFov = MOVEMENT.BASE_FOV;
+  private baseFov = MOVEMENT.BASE_FOV;
+  /** Last input snapshot, exposed so the HUD can draw the input overlay. */
+  private lastInput: InputState = EMPTY_INPUT;
 
   private wallRunning = false;
   private wallRunTime = 0;
@@ -562,6 +565,7 @@ export class FirstPersonController {
 
   update(dt: number) {
     const input = this.input.read();
+    this.lastInput = input;
 
     // Air Shift starts a slow-motion sensory boost instead of an air dash.
     // A live pull takes priority: Shift cancels the pull and dashes instead.
@@ -1581,7 +1585,7 @@ export class FirstPersonController {
     const grappleFov = this.grappleFov * GRAPPLE_CONFIG.FOV_KICK;
     // A deflect punches the FOV out for a moment as well.
     const parryFov = this.parryFov;
-    const targetFov = MOVEMENT.BASE_FOV
+    const targetFov = this.baseFov
       + MOVEMENT.MAX_FOV_WIDEN * fovProgress
       + boostZoom
       + grappleFov
@@ -1950,8 +1954,8 @@ export class FirstPersonController {
     this.slideCameraRoll = 0;
     this.grappleRoll = 0;
     this.eyeOffset = MOVEMENT.EYE_OFFSET;
-    this.cameraFov = MOVEMENT.BASE_FOV;
-    this.camera.fov = MOVEMENT.BASE_FOV;
+    this.cameraFov = this.baseFov;
+    this.camera.fov = this.baseFov;
 
     this.yaw = yaw;
     this.pitch = pitch;
@@ -1965,6 +1969,18 @@ export class FirstPersonController {
 
   get isGrounded(): boolean {
     return this.grounded;
+  }
+
+  /** Current input snapshot, used by the toggleable input overlay. */
+  get inputState(): InputState {
+    return this.lastInput;
+  }
+
+  /** Base vertical FOV in radians before speed and impact effects. */
+  setBaseFov(radians: number) {
+    this.baseFov = radians;
+    this.cameraFov = radians;
+    this.camera.fov = radians;
   }
 
   /**

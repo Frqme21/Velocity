@@ -8,9 +8,16 @@ import { loadLevel } from '../world/maps/loadLevel';
 import { IntroCinematic } from '../cinematic/IntroCinematic';
 import { KatanaViewmodel } from '../world/KatanaViewmodel';
 import { Grappler, type GrappleAnchor } from '../world/Grappler';
-import { HUD } from '../ui/HUD';
+import { HUD, type RunStats } from '../ui/HUD';
 import { AudioManager } from '../audio/AudioManager';
 import { COMBAT_CONFIG } from '../config/combat';
+import {
+  loadBestTime,
+  loadPreferences,
+  saveBestTime,
+  savePreferences,
+  type GamePreferences,
+} from '../config/preferences';
 import { ProjectileManager } from '../combat/ProjectileManager';
 import { CombatSystem } from '../combat/CombatSystem';
 import { ShurikenSystem } from '../combat/ShurikenSystem';
@@ -87,6 +94,19 @@ export class Game {
   /** Frame counter for debug logging. */
   private debugFrame = 0;
 
+  /** Player settings loaded from local storage. */
+  private preferences!: GamePreferences;
+  /** Elapsed time of the current run, in real seconds. */
+  private runElapsed = 0;
+  /** True while the run clock is advancing. */
+  private runTiming = false;
+  /** Number of the current attempt, starting at one. */
+  private attempts = 1;
+  /** Personal best for the current level, in seconds. */
+  private bestTime: number | null = null;
+  /** Storage key for the current level's best time. */
+  private recordKey = '';
+
   /** Time left of the hit-stop micro freeze, in seconds. */
   private hitStopTimer = 0;
   /** Set when the player was hit and the run has to be reset. */
@@ -112,6 +132,9 @@ export class Game {
     this.fromEditor = params.get('fromEditor') === '1';
     this.campaign = params.get('campaign') === '1';
     this.currentLevel = currentName;
+    this.preferences = loadPreferences();
+    this.recordKey = this.currentLevel ?? ORIGINAL_LEVEL;
+    this.bestTime = loadBestTime(this.recordKey);
 
     // "Play all" only visits levels that actually have a finish ring. Levels
     // still being built are kept in the picker but skipped here, so a chain
@@ -227,6 +250,8 @@ export class Game {
     );
 
     this.hud = new HUD(document.getElementById('hud')!);
+    this.hud.applyPreferences(this.preferences);
+    this.controller.setBaseFov((this.preferences.fov * Math.PI) / 180);
 
     // The first run shows a warning about CTRL + W: CTRL is the slide key,
     // but CTRL + W closes the browser tab. Hold W first, then tap CTRL.
@@ -549,6 +574,13 @@ export class Game {
       this.pause();
     };
 
+    // H toggles the input overlay from anywhere, including the pause menu.
+    this.input.onHudTogglePressed = () => {
+      this.preferences.showInputOverlay = !this.preferences.showInputOverlay;
+      this.hud.applyPreferences(this.preferences);
+      savePreferences(this.preferences);
+    };
+
     this.input.onPointerLockChange = (locked) => {
       if (locked) {
         this.pointerWasLocked = true;
@@ -563,6 +595,7 @@ export class Game {
     };
 
     this.audio = new AudioManager(this.scene);
+    this.audio.setVolume(this.preferences.volume);
     await this.audio.load();
     // The browser needs a gesture before the audio context may run.
     this.canvas.addEventListener('click', () => this.audio.unlock());
@@ -584,6 +617,9 @@ export class Game {
         onFinish: () => {
           this.pendingReset = false;
           this.hitStopTimer = 0;
+          // The intro is a cutscene, so the run starts when control is handed
+          // back to the player.
+          this.runTiming = true;
         },
       });
     }
@@ -623,6 +659,7 @@ export class Game {
     // The game starts with the opening shot unless the first-run warning is
     // still up; dismissing it starts the shot.
     if (!this.warningPending) this.cinematic?.start();
+    if (this.customLevel && !this.warningPending) this.runTiming = true;
 
     this.engine.runRenderLoop(() => {
       const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
@@ -682,6 +719,8 @@ export class Game {
           dashing: false,
           sliding: false,
           sensoryBoost: false,
+          run: this.runStats(),
+          input: this.controller.inputState,
         });
         this.scene.render();
         return;
@@ -701,6 +740,10 @@ export class Game {
         this.scene.render();
         return;
       }
+
+      // The run clock uses real time, so hit-stop still counts. It stops on
+      // pause, death, completion, and during the intro.
+      if (this.runTiming) this.runElapsed += dt;
 
       // Hit-stop: the whole world freezes for a few milliseconds when the
       // blade connects. Everything that moves is held still - the player,
@@ -824,6 +867,8 @@ export class Game {
         dashing: this.controller.isDashing,
         sliding: this.controller.isSliding,
         sensoryBoost: this.controller.isSensoryBoosting,
+        run: this.runStats(),
+        input: this.controller.inputState,
       });
       this.scene.render();
     });
@@ -939,6 +984,19 @@ export class Game {
     return false;
   }
 
+  /** Snapshot of the run stats drawn in the bottom HUD panel. */
+  private runStats(): RunStats {
+    return {
+      elapsed: this.runElapsed,
+      bestTime: this.bestTime,
+      attempts: this.attempts,
+      showTimer: this.preferences.showTimer,
+      showBestTime: this.preferences.showBestTime,
+      showAttempts: this.preferences.showAttempts,
+      showInputOverlay: this.preferences.showInputOverlay,
+    };
+  }
+
   /** Pausing is available once gameplay or the intro owns the screen. */
   private canPause() {
     return !this.warningPending && !this.fatal && !this.completed && !this.transitioning;
@@ -954,6 +1012,22 @@ export class Game {
       resume: () => this.resume(),
       restart: () => this.restartFromPause(),
       quit: () => this.quitToLevelSelect(),
+      settings: { ...this.preferences },
+      onVolumeChange: (volume) => {
+        this.preferences.volume = volume;
+        this.audio.setVolume(volume);
+        savePreferences(this.preferences);
+      },
+      onFovChange: (degrees) => {
+        this.preferences.fov = degrees;
+        this.controller.setBaseFov((degrees * Math.PI) / 180);
+        savePreferences(this.preferences);
+      },
+      onToggle: (key, value) => {
+        this.preferences[key] = value;
+        this.hud.applyPreferences(this.preferences);
+        savePreferences(this.preferences);
+      },
     });
   }
 
@@ -992,6 +1066,7 @@ export class Game {
   private enterFatal() {
     if (this.fatal) return;
     this.fatal = true;
+    this.runTiming = false;
     this.input.enabled = false;
     // Release the hook now, not on R: a death mid-pull must not leave the
     // ring marked as attached behind the fatal screen.
@@ -1004,7 +1079,22 @@ export class Game {
   private enterCompleted() {
     if (this.completed) return;
     this.completed = true;
+    this.runTiming = false;
     this.input.enabled = false;
+
+    const time = this.runElapsed;
+    const previousBest = this.bestTime;
+    const isBest = previousBest === null || time < previousBest;
+    if (isBest) {
+      this.bestTime = time;
+      saveBestTime(this.recordKey, time);
+    }
+    const stats = {
+      time,
+      bestTime: this.bestTime,
+      attempts: this.attempts,
+      isBest,
+    };
 
     // In campaign mode a finish ring is a doorway into the next playable
     // level. Ringless levels were already skipped when this level loaded.
@@ -1014,6 +1104,7 @@ export class Game {
       this.hud.showLevelComplete(
         `${levelLabel(this.currentLevel ?? '')} CLEAR`,
         'LOADING NEXT LEVEL…',
+        stats,
       );
       window.setTimeout(() => {
         window.location.href = this.levelUrl(next);
@@ -1026,6 +1117,7 @@ export class Game {
       this.campaign
         ? 'PRESS <kbd>R</kbd> TO RUN THE FINAL LEVEL AGAIN'
         : 'PRESS <kbd>R</kbd> TO RUN IT AGAIN',
+      stats,
     );
   }
 
@@ -1047,6 +1139,7 @@ export class Game {
       // The dismiss click/key press is a user gesture, so pointer lock can be
       // taken here without asking for another click on the canvas.
       this.input.requestPointerLock();
+      this.runTiming = true;
     } else {
       this.cinematic?.start();
     }
@@ -1063,6 +1156,9 @@ export class Game {
     // R must not restart the old level while the next campaign level is loading.
     if (this.transitioning) return;
     const replayIntro = this.cinematic?.active ?? false;
+    this.attempts += 1;
+    this.runElapsed = 0;
+    this.runTiming = false;
 
     // Teleporting cancels the controller's pull silently; clear the hook's
     // tether too so the next grapple works immediately after respawning.
@@ -1087,6 +1183,8 @@ export class Game {
     if (replayIntro) {
       this.cinematic?.start();
     } else {
+      // A restart begins at the gameplay spawn, so the clock starts now.
+      this.runTiming = true;
       // Restart at the courtyard where control was handed over, not back up
       // on the rooftop beam.
       this.controller.setSpawn(this.world.gameplaySpawn);

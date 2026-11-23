@@ -22,7 +22,7 @@ interface ClipDefinition {
    * The parry needs a clang no matter what, so it synthesizes a metallic
    * ping with the Web Audio API when the sample is unavailable.
    */
-  fallback?: () => void;
+  fallback?: (volume?: number, masterVolume?: number) => void;
 }
 
 const CLIPS: Record<SfxId, ClipDefinition> = {
@@ -79,6 +79,7 @@ interface Clip {
 export class AudioManager {
   private scene: BABYLON.Scene;
   private clips = new Map<SfxId, Clip>();
+  private masterVolume = 1;
 
   constructor(scene: BABYLON.Scene) {
     this.scene = scene;
@@ -130,20 +131,25 @@ export class AudioManager {
   play(id: SfxId, options?: { volume?: number; rate?: number }) {
     const clip = this.clips.get(id);
     if (!clip || clip.instances.length === 0) {
-      clip?.definition.fallback?.();
+      clip?.definition.fallback?.(1, this.masterVolume);
       return;
     }
 
     const instance = clip.instances[clip.next];
     clip.next = (clip.next + 1) % clip.instances.length;
     if (!instance || !instance.isReady()) {
-      clip.definition.fallback?.();
+      clip.definition.fallback?.(1, this.masterVolume);
       return;
     }
 
-    instance.setVolume(options?.volume ?? clip.definition.volume);
+    instance.setVolume((options?.volume ?? clip.definition.volume) * this.masterVolume);
     if (options?.rate) instance.setPlaybackRate(options.rate);
     instance.play();
+  }
+
+  /** Set the saved master volume used by every clip and fallback sound. */
+  setVolume(volume: number) {
+    this.masterVolume = Math.max(0, Math.min(1, volume));
   }
 
   /** Release the audio engine's user-gesture lock (call on the first click). */
@@ -159,7 +165,7 @@ export class AudioManager {
  * short noise strike for the contact, plus three detuned partials for the
  * ring of the blade.
  */
-function playMetallicPing(volume = 0.55) {
+function playMetallicPing(volume = 0.55, masterVolume = 1) {
   const context = BABYLON.AbstractEngine.audioEngine?.audioContext;
   if (!context) return;
   if (context.state === 'suspended') void context.resume();
@@ -167,7 +173,7 @@ function playMetallicPing(volume = 0.55) {
   const now = context.currentTime;
 
   const master = context.createGain();
-  master.gain.value = volume;
+  master.gain.value = volume * masterVolume;
   master.connect(context.destination);
 
   // The strike itself: a very short band of noise.

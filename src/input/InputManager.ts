@@ -20,6 +20,8 @@ export interface InputState {
   slidePressed: boolean;
   /** True only on the frame the attack button is pressed. */
   attackPressed: boolean;
+  /** True only on the frame the shuriken key is pressed. */
+  throwPressed: boolean;
   mouseDX: number;
   mouseDY: number;
 }
@@ -27,7 +29,7 @@ export interface InputState {
 type PointerLockRequest = (options?: { unadjustedMovement?: boolean }) => Promise<void> | void;
 
 /** A held-still input snapshot used while a cinematic owns the screen. */
-const ZERO_INPUT: InputState = {
+export const EMPTY_INPUT: InputState = {
   forward: false,
   backward: false,
   left: false,
@@ -41,6 +43,7 @@ const ZERO_INPUT: InputState = {
   slide: false,
   slidePressed: false,
   attackPressed: false,
+  throwPressed: false,
   mouseDX: 0,
   mouseDY: 0,
 };
@@ -56,6 +59,7 @@ export class InputManager {
   private leftLatch = false;
   private rightLatch = false;
   private attackLatch = false;
+  private throwLatch = false;
   private locked = false;
   private canvas: HTMLCanvasElement;
 
@@ -100,6 +104,9 @@ export class InputManager {
    */
   public onPausePressed?: () => void;
 
+  /** Fired when H is pressed so the input overlay can be toggled. */
+  public onHudTogglePressed?: () => void;
+
   /**
    * False while a cinematic or a fatal-error state owns the screen.
    *
@@ -121,6 +128,10 @@ export class InputManager {
         this.onPausePressed?.();
         return;
       }
+      if (event.code === 'KeyH' && !event.repeat) {
+        this.onHudTogglePressed?.();
+        return;
+      }
       // The reset key always works, even when the pointer is not locked.
       if (event.code === 'KeyR' && !event.repeat) {
         this.onResetPressed?.();
@@ -131,7 +142,10 @@ export class InputManager {
       if (!this.locked || !this.enabled) return;
       event.preventDefault();
       if (event.code === 'Space' && !event.repeat) this.jumpLatch = true;
-      if (event.code === 'KeyQ' && !event.repeat) this.onThrowPressed?.();
+      if (event.code === 'KeyQ' && !event.repeat) {
+        this.throwLatch = true;
+        this.onThrowPressed?.();
+      }
       if (event.code === 'KeyA' && !event.repeat) this.leftLatch = true;
       if (event.code === 'KeyD' && !event.repeat) this.rightLatch = true;
       if ((event.code === 'ShiftLeft' || event.code === 'ShiftRight') && !event.repeat) {
@@ -244,7 +258,7 @@ export class InputManager {
 
   /** Read input and clear the per-frame mouse deltas. */
   read(): InputState {
-    const state = this.enabled ? this.buildState() : ZERO_INPUT;
+    const state = this.enabled ? this.buildState() : EMPTY_INPUT;
     this.dx = 0;
     this.dy = 0;
     this.jumpLatch = false;
@@ -253,6 +267,7 @@ export class InputManager {
     this.leftLatch = false;
     this.rightLatch = false;
     this.attackLatch = false;
+    this.throwLatch = false;
     return state;
   }
 
@@ -272,6 +287,7 @@ export class InputManager {
       slide: this.keys.has('ControlLeft') || this.keys.has('ControlRight'),
       slidePressed: this.slideLatch,
       attackPressed: this.attackLatch,
+      throwPressed: this.throwLatch,
       mouseDX: this.dx,
       mouseDY: this.dy,
     };
