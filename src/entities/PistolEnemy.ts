@@ -61,10 +61,14 @@ export class PistolEnemy {
   private root: BABYLON.TransformNode;
   /** The meshes of the enemy, so they can be hidden and faded. */
   private meshes: BABYLON.AbstractMesh[] = [];
-  /** The idle clip, if the model has one. */
+  /** The idle clip from the Ghostrunner GLB, if the model has one. */
   private idleGroup: BABYLON.AnimationGroup | null = null;
-  /** The aiming clip, if the model has one. */
+  /** The aiming clip from the Ghostrunner GLB, if the model has one. */
   private shootingGroup: BABYLON.AnimationGroup | null = null;
+  /** The walk clip, kept as a fallback pose source. */
+  private walkGroup: BABYLON.AnimationGroup | null = null;
+  /** Cloned skeletons that need explicit GPU bone storage setup. */
+  private skeletons: BABYLON.Skeleton[] = [];
 
   /** The red aiming laser. */
   private sight: BABYLON.Mesh;
@@ -187,6 +191,7 @@ export class PistolEnemy {
   private buildFromModel(model: EnemyModelSource, index: number) {
     const entries = model.container.instantiateModelsToScene(
       (name) => `${name}-enemy-${index}`,
+      true,
     );
 
     for (const node of entries.rootNodes) {
@@ -203,21 +208,67 @@ export class PistolEnemy {
       }
     }
 
+    // The 65-bone rig exceeds the vertex uniform budget on most GPUs. Bone
+    // textures keep the skinned mesh rendering on every platform.
+    for (const skeleton of entries.skeletons) {
+      skeleton.useTextureToStoreBoneMatrices = true;
+      this.skeletons.push(skeleton);
+    }
+
     // The model is authored in centimetres.
     this.root.scaling.setAll(COMBAT_CONFIG.ENEMY_MODEL_SCALE);
 
     for (const group of entries.animationGroups) {
-      if (group.name.toLowerCase().includes('idle')) {
+      const name = group.name.toLowerCase();
+      if (name.includes('idle')) {
         this.idleGroup = group;
-      } else if (group.name.toLowerCase().includes('shoot')) {
+      } else if (name.includes('shoot')) {
         this.shootingGroup = group;
+      } else if (name.includes('walk')) {
+        this.walkGroup = group;
       }
     }
 
-    if (this.idleGroup) {
-      this.idleGroup.loopAnimation = true;
-      this.idleGroup.start(true);
+    const initialClip = this.idleGroup ?? this.walkGroup ?? this.shootingGroup;
+    if (!initialClip) {
+      console.warn(`Pistol enemy ${index} has no Ghostrunner animation clips`);
+      return;
     }
+
+    // Seed the rig from the first frame of the real Idle clip. If an
+    // animatable is later stopped by a state change, the guard keeps the
+    // authored pose instead of snapping back to the bind pose.
+    this.applyClipFrame(initialClip, initialClip.from);
+    this.playClip(initialClip, true);
+  }
+
+  /**
+   * Apply one frame of a baked GLB clip directly to its target nodes.
+   *
+   * This reads the same quaternion and translation tracks that the
+   * AnimationGroup plays, so the seeded pose comes from the Ghostrunner file
+   * rather than from hand-written bone angles.
+   */
+  private applyClipFrame(group: BABYLON.AnimationGroup, frame: number) {
+    for (const target of group.targetedAnimations) {
+      const property = target.animation.targetProperty;
+      const value = target.animation.evaluate(frame);
+      const node = target.target as unknown as Record<string, unknown>;
+      if (value && property) {
+        node[property] = value.clone ? value.clone() : value;
+      }
+    }
+  }
+
+  /** Stop every local clip and start one cleanly from its first frame. */
+  private playClip(group: BABYLON.AnimationGroup | null, loop: boolean) {
+    this.idleGroup?.stop();
+    this.shootingGroup?.stop();
+    this.walkGroup?.stop();
+    if (!group) return;
+    group.loopAnimation = loop;
+    group.start(loop);
+    group.goToFrame(group.from);
   }
 
   /**
@@ -483,30 +534,16 @@ export class PistolEnemy {
   /**
    * Switch to the aiming animation.
    *
-   * The idle clip is stopped first: the two clips drive the same bones,
-   * so letting them run together would fight over every joint.
+   * All three clips drive the same bones, so playClip stops the previous one
+   * before starting this one.
    */
   private playShooting() {
-    if (!this.shootingGroup) return;
-    if (this.idleGroup?.isStarted) {
-      this.idleGroup.stop();
-    }
-    if (!this.shootingGroup.isStarted) {
-      this.shootingGroup.loopAnimation = true;
-      this.shootingGroup.start(true);
-    }
+    this.playClip(this.shootingGroup, true);
   }
 
-  /** Switch back to the idle animation. */
+  /** Switch back to the Ghostrunner idle animation. */
   private playIdle() {
-    if (this.shootingGroup?.isStarted) {
-      this.shootingGroup.stop();
-    }
-    if (!this.idleGroup) return;
-    if (!this.idleGroup.isStarted) {
-      this.idleGroup.loopAnimation = true;
-      this.idleGroup.start(true);
-    }
+    this.playClip(this.idleGroup ?? this.walkGroup, true);
   }
 
   // ------------------------------------------------------------------
@@ -583,8 +620,12 @@ export class PistolEnemy {
     this.sightMaterial.dispose();
     this.idleGroup?.dispose();
     this.shootingGroup?.dispose();
+    this.walkGroup?.dispose();
     for (const mesh of this.meshes) {
       mesh.dispose();
+    }
+    for (const skeleton of this.skeletons) {
+      skeleton.dispose();
     }
     this.root.dispose();
   }
