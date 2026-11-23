@@ -95,6 +95,12 @@ export class InputManager {
   public onSkipPressed?: () => void;
 
   /**
+   * Fired when Escape is pressed so the game can pause or resume. Like reset,
+   * it works without pointer lock because Escape releases the pointer itself.
+   */
+  public onPausePressed?: () => void;
+
+  /**
    * False while a cinematic or a fatal-error state owns the screen.
    *
    * Reset and skip are deliberately handled before this gate, so the player
@@ -109,6 +115,12 @@ export class InputManager {
     this.canvas = canvas;
 
     window.addEventListener('keydown', (event) => {
+      // Escape owns pointer lock in the browser. Let the default release happen
+      // and give the game a chance to open or close the pause menu.
+      if (event.code === 'Escape' && !event.repeat) {
+        this.onPausePressed?.();
+        return;
+      }
       // The reset key always works, even when the pointer is not locked.
       if (event.code === 'KeyR' && !event.repeat) {
         this.onResetPressed?.();
@@ -211,6 +223,13 @@ export class InputManager {
       result?.catch?.(() => {});
     } catch {
       // Pointer lock may be unavailable in an embedded browser.
+    }
+  }
+
+  /** Release pointer lock so an overlay can receive clicks. */
+  releasePointerLock() {
+    if (document.pointerLockElement === this.canvas) {
+      document.exitPointerLock();
     }
   }
 

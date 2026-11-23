@@ -94,7 +94,7 @@ Level data is read from [`levels/`](levels/) at runtime. Level order and campaig
 | Right mouse | Fire the grapple at the locked ring |
 | <kbd>Q</kbd> | Throw a homing shuriken |
 | <kbd>R</kbd> | Instant reset, works without pointer lock |
-| <kbd>Esc</kbd> | Release the pointer |
+| <kbd>Esc</kbd> | Pause menu, releases the pointer |
 
 Hold <kbd>W</kbd> first, then tap <kbd>Ctrl</kbd>. <kbd>Ctrl</kbd> + <kbd>W</kbd> closes the browser tab.
 
@@ -104,7 +104,8 @@ Hold <kbd>W</kbd> first, then tap <kbd>Ctrl</kbd>. <kbd>Ctrl</kbd> + <kbd>W</kbd
 |---|---|---|
 | Bootstrap | [`src/app/main.ts`](src/app/main.ts) | Level picker, query params, game startup |
 | Game loop | [`src/app/Game.ts`](src/app/Game.ts) | Scene wiring, render loop, HUD updates |
-| Input | [`src/input/InputManager.ts`](src/input/InputManager.ts) | Raw pointer lock look, keyboard state, reset and throw hooks |
+| Input | [`src/input/InputManager.ts`](src/input/InputManager.ts) | Raw pointer lock look, keyboard state, reset, pause and throw hooks |
+| Pause menu | [`src/ui/HUD.ts`](src/ui/HUD.ts) | Escape overlay with resume, restart, and level select |
 | Movement | [`src/world/FirstPersonController.ts`](src/world/FirstPersonController.ts) | Run, jump, dash, slide, mantle, wall run, sensory boost |
 | Grapple | [`src/world/Grappler.ts`](src/world/Grappler.ts) | Cone targeting, line of sight, anchor visuals |
 | Katana | [`src/world/KatanaViewmodel.ts`](src/world/KatanaViewmodel.ts) | Swing animation, parry timing, blade pose |

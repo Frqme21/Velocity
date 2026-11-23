@@ -72,6 +72,12 @@ export class Game {
   private fromEditor = false;
   /** True while the first-run Ctrl+W warning owns the screen. */
   private warningPending = false;
+  /** True while the pause overlay owns the screen. */
+  private paused = false;
+  /** True only when the Escape key opened the pause overlay. */
+  private pauseOpenedByEscapeKey = false;
+  /** Tracks pointer lock loss so browser Escape can pause the run. */
+  private pointerWasLocked = false;
   /** True while a campaign transition is loading the next level. */
   private transitioning = false;
   /** True after falling out of the level, until R restarts. */
@@ -523,8 +529,38 @@ export class Game {
       this.hud.flashDamage();
     };
 
-    // R resets the run by hand, the same way a death does.
-    this.input.onResetPressed = () => this.resetRun();
+    // R resets the run by hand, the same way a death does. While paused it
+    // restarts from the menu instead of leaving the overlay up.
+    this.input.onResetPressed = () => {
+      if (this.paused) this.restartFromPause();
+      else this.resetRun();
+    };
+
+    // Escape pauses or resumes. Pointer lock may also be lost before the key
+    // event arrives, so the lock callback can open the same menu. The flag
+    // below stops that second event from closing it again.
+    this.input.onPausePressed = () => {
+      if (this.paused) {
+        if (this.pauseOpenedByEscapeKey) this.resume();
+        return;
+      }
+      if (!this.canPause()) return;
+      this.pauseOpenedByEscapeKey = true;
+      this.pause();
+    };
+
+    this.input.onPointerLockChange = (locked) => {
+      if (locked) {
+        this.pointerWasLocked = true;
+        return;
+      }
+      const wasLocked = this.pointerWasLocked;
+      this.pointerWasLocked = false;
+      if (wasLocked && !this.paused && this.canPause()) {
+        this.pauseOpenedByEscapeKey = false;
+        this.pause();
+      }
+    };
 
     this.audio = new AudioManager(this.scene);
     await this.audio.load();
@@ -555,6 +591,7 @@ export class Game {
     // Space/Enter dismisses the first-run warning before it can skip a
     // cinematic: at that point the intro has not even started yet.
     this.input.onSkipPressed = () => {
+      if (this.paused) return;
       if (this.hud.controlWarningActive) {
         this.hud.dismissControlWarning();
         return;
@@ -589,6 +626,14 @@ export class Game {
 
     this.engine.runRenderLoop(() => {
       const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
+
+      // Pause holds every system, including the intro and animated props.
+      // The last rendered frame stays on screen behind the menu.
+      if (this.paused) {
+        this.input.read();
+        this.scene.render();
+        return;
+      }
 
       // The first-run warning holds the whole simulation: no movement, no
       // enemies and no cinematic until the player acknowledges it.
@@ -892,6 +937,49 @@ export class Game {
       }
     }
     return false;
+  }
+
+  /** Pausing is available once gameplay or the intro owns the screen. */
+  private canPause() {
+    return !this.warningPending && !this.fatal && !this.completed && !this.transitioning;
+  }
+
+  /** Freeze the run and hand the screen to the pause menu. */
+  private pause() {
+    if (this.paused || !this.canPause()) return;
+    this.paused = true;
+    this.input.enabled = false;
+    this.input.releasePointerLock();
+    this.hud.showPause({
+      resume: () => this.resume(),
+      restart: () => this.restartFromPause(),
+      quit: () => this.quitToLevelSelect(),
+    });
+  }
+
+  /** Leave the pause menu and give input back to the player. */
+  private resume() {
+    if (!this.paused) return;
+    this.paused = false;
+    this.pauseOpenedByEscapeKey = false;
+    this.hud.hidePause();
+    this.input.enabled = true;
+    this.input.requestPointerLock();
+  }
+
+  /** Restart from the pause menu, then return to play or the intro. */
+  private restartFromPause() {
+    if (!this.paused) return;
+    this.paused = false;
+    this.pauseOpenedByEscapeKey = false;
+    this.hud.hidePause();
+    this.resetRun();
+    if (!this.cinematic?.active) this.input.requestPointerLock();
+  }
+
+  /** Leave the run and return to the level picker. */
+  private quitToLevelSelect() {
+    window.location.href = '/';
   }
 
   /**

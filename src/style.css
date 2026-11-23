@@ -376,6 +376,11 @@ body.cinematic #crosshair,
 body.cinematic #dash-meter,
 body.cinematic #movement-stats,
 body.cinematic #speed-lines,
+body.paused #crosshair,
+body.paused #dash-meter,
+body.paused #movement-stats,
+body.paused #speed-lines,
+body.paused #shuriken-energy,
 body.fatal #crosshair,
 body.fatal #dash-meter,
 body.fatal #movement-stats,
@@ -595,6 +600,72 @@ body.warning #movement-stats,
 body.warning #speed-lines,
 body.warning #shuriken-energy {
   display: none;
+}
+
+/* -------------------------------------------------------------------------
+ * Pause menu
+ * ---------------------------------------------------------------------- */
+#pause-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: auto;
+  opacity: 0;
+  visibility: hidden;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 88%, transparent);
+  backdrop-filter: blur(8px);
+  transition: opacity 0.18s ease-out;
+}
+
+#pause-menu.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.pause-card {
+  gap: 14px;
+}
+
+.pause-title {
+  color: var(--md-sys-color-on-surface);
+  font: 800 clamp(34px, 6vw, 68px)/1 var(--font-display);
+  font-style: var(--header-italic);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pause-sub,
+.pause-hint {
+  color: var(--md-sys-color-on-surface-variant);
+  font: 700 clamp(11px, 1.5vw, 14px)/1.4 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.pause-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(280px, 100%);
+  margin-top: 8px;
+}
+
+.pause-actions .m3-btn {
+  width: 100%;
+}
+
+.pause-hint {
+  color: var(--md-sys-color-outline);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.pause-hint span {
+  opacity: 0.6;
 }
 
 /* -------------------------------------------------------------------------
@@ -900,6 +971,7 @@ body.sensory-boost #crosshair {
 #fatal-error kbd,
 #level-complete kbd,
 #ctrl-warning kbd,
+#pause-menu kbd,
 .select-tip kbd {
   border: 1px solid var(--md-sys-color-secondary);
   border-radius: var(--shape-chip-radius);

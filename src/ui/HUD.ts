@@ -11,6 +11,12 @@ export interface HUDState {
   sensoryBoost: boolean;
 }
 
+export interface PauseActions {
+  resume: () => void;
+  restart: () => void;
+  quit: () => void;
+}
+
 export class HUD {
   private speedElement: HTMLElement;
   private fpsElement: HTMLElement;
@@ -29,8 +35,14 @@ export class HUD {
   private completeSubElement: HTMLElement;
   private warningElement: HTMLElement;
   private warningButton: HTMLButtonElement;
+  private pauseElement: HTMLElement;
+  private pauseResumeButton: HTMLButtonElement;
+  private pauseRestartButton: HTMLButtonElement;
+  private pauseQuitButton: HTMLButtonElement;
   /** Called once, when the first-level warning is dismissed. */
   private warningDismiss: (() => void) | null = null;
+  /** Button callbacks for the currently open pause menu. */
+  private pauseActions: PauseActions | null = null;
   /** The pending fade-out timers of the screen flashes. */
   private timers = new Map<'damage' | 'hit', number>();
 
@@ -87,6 +99,19 @@ export class HUD {
           <div class="warning-foot">or press <kbd>ENTER</kbd> / <kbd>SPACE</kbd></div>
         </div>
       </div>
+      <div id="pause-menu" aria-live="polite">
+        <div class="pause-card result-dialog">
+          <span class="section-index">SYSTEM HALTED</span>
+          <div class="pause-title">PAUSED</div>
+          <div class="pause-sub">PRESS <kbd>ESC</kbd> TO RESUME</div>
+          <div class="pause-actions">
+            <button type="button" id="pause-resume" class="m3-btn m3-btn-filled">RESUME</button>
+            <button type="button" id="pause-restart" class="m3-btn m3-btn-tonal">RESTART RUN</button>
+            <button type="button" id="pause-quit" class="m3-btn m3-btn-outlined">LEVEL SELECT</button>
+          </div>
+          <div class="pause-hint"><kbd>ESC</kbd> RESUME <span>/</span> <kbd>R</kbd> RESTART</div>
+        </div>
+      </div>
     `;
     this.speedElement = root.querySelector<HTMLElement>('#speed')!;
     this.fpsElement = root.querySelector<HTMLElement>('#fps')!;
@@ -106,6 +131,13 @@ export class HUD {
     this.warningElement = root.querySelector<HTMLElement>('#ctrl-warning')!;
     this.warningButton = root.querySelector<HTMLButtonElement>('#warning-continue')!;
     this.warningButton.addEventListener('click', () => this.dismissControlWarning());
+    this.pauseElement = root.querySelector<HTMLElement>('#pause-menu')!;
+    this.pauseResumeButton = root.querySelector<HTMLButtonElement>('#pause-resume')!;
+    this.pauseRestartButton = root.querySelector<HTMLButtonElement>('#pause-restart')!;
+    this.pauseQuitButton = root.querySelector<HTMLButtonElement>('#pause-quit')!;
+    this.pauseResumeButton.addEventListener('click', () => this.pauseActions?.resume());
+    this.pauseRestartButton.addEventListener('click', () => this.pauseActions?.restart());
+    this.pauseQuitButton.addEventListener('click', () => this.pauseActions?.quit());
   }
 
   /** Show the first-level Ctrl+W tip and call back once when dismissed. */
@@ -129,6 +161,32 @@ export class HUD {
 
   get controlWarningActive() {
     return this.warningElement.classList.contains('active');
+  }
+
+  /** Show the pause overlay and wire its three actions. */
+  showPause(actions: PauseActions) {
+    if (this.pauseActive) {
+      this.pauseActions = actions;
+      return;
+    }
+    this.pauseActions = actions;
+    document.body.classList.add('paused');
+    this.pauseElement.classList.add('active');
+    this.pauseResumeButton.focus();
+  }
+
+  hidePause() {
+    if (!this.pauseActive) return;
+    document.body.classList.remove('paused');
+    this.pauseElement.classList.remove('active');
+    this.pauseActions = null;
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  }
+
+  get pauseActive() {
+    return this.pauseElement.classList.contains('active');
   }
 
   /** Enter or leave the scripted intro: letterbox, caption and hidden HUD. */
